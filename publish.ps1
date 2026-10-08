@@ -27,6 +27,19 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
+function Invoke-Git {
+    # git пишет служебные сообщения в stderr — при Stop это стало бы исключением.
+    # Временно ослабляем режим и возвращаем реальный код возврата.
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        git @Args 2>&1 | ForEach-Object { Write-Host "$_" }
+        return $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+}
+
 # --- Что изменилось? --------------------------------------------------------
 $changed = git status --porcelain
 if (-not $changed) {
@@ -37,27 +50,27 @@ if (-not $changed) {
 # --- Опциональное обновление ------------------------------------------------
 if ($Pull) {
     Write-Host "[GIT] git pull --rebase..." -ForegroundColor Cyan
-    git pull --rebase origin main
-    if ($LASTEXITCODE -ne 0) { Write-Error "pull --rebase не удался; разрешите конфликты и повторите"; exit 1 }
+    $code = Invoke-Git pull --rebase origin main
+    if ($code -ne 0) { Write-Error "pull --rebase не удался; разрешите конфликты и повторите"; exit 1 }
 }
 
 # --- add --------------------------------------------------------------------
 Write-Host "[GIT] Добавляю изменения..." -ForegroundColor Cyan
-git add -A
-if ($LASTEXITCODE -ne 0) { Write-Error "git add не удался"; exit 1 }
+$code = Invoke-Git add -A
+if ($code -ne 0) { Write-Error "git add не удался"; exit 1 }
 
 # --- commit -----------------------------------------------------------------
 if (-not $Message) {
     $Message = "Изменения: " + (Get-Date -Format "yyyy-MM-dd HH:mm")
 }
 Write-Host "[GIT] Коммит: $Message" -ForegroundColor Cyan
-git -c core.safecrlf=false commit -m $Message --allow-empty-message
-if ($LASTEXITCODE -ne 0) { Write-Error "git commit не удался (возможно, нечего коммитить)"; exit 1 }
+$code = Invoke-Git -c core.safecrlf=false commit -m $Message --allow-empty-message
+if ($code -ne 0) { Write-Error "git commit не удался (возможно, нечего коммитить)"; exit 1 }
 
 # --- push -------------------------------------------------------------------
 Write-Host "[GIT] Выкладываю в origin/main..." -ForegroundColor Cyan
-git push origin main 2>&1 | ForEach-Object { "$_" }
-if ($LASTEXITCODE -ne 0) { Write-Error "git push не удался (проверьте доступ к репозиторию)"; exit 1 }
+$code = Invoke-Git push origin main
+if ($code -ne 0) { Write-Error "git push не удался (проверьте доступ к репозиторию)"; exit 1 }
 
 Write-Host ""
 Write-Host "[OK] Готово: коммит выложен, CI запущен." -ForegroundColor Green
