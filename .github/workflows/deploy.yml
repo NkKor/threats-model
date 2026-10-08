@@ -1,0 +1,35 @@
+name: Deploy
+
+# Развёртывание на рабочем ПК (self-hosted раннер = CI/CD-сервер):
+# запускается только после успешного CI на ветке main либо вручную
+# (workflow_dispatch). Остановка старого сервиса, обновление кода,
+# перезапуск через запланированную задачу, проверка /health.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    # Только после зелёного CI (и только для push в main), либо вручную
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: [self-hosted, Windows]
+    timeout-minutes: 15
+
+    steps:
+      - name: Код
+        uses: actions/checkout@v4
+        with:
+          # Не чистить рабочий каталог: сохраняем .venv, .env и data/threats.db
+          # между деплоями (иначе каждая выкладка переустанавливала бы окружение)
+          clean: false
+
+      - name: Развёртывание и перезапуск сервиса
+        shell: powershell
+        run: .\deploy.ps1
