@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Шаг 3. Интерфейсы{% endblock %}
+
+{% block content %}
+<div class="panel">
+    <h2>Шаг 3. Интерфейсы объектов воздействия</h2>
+    <p class="hint">
+        Типы интерфейсов соответствуют методике ФСТЭК. Возможность доступа к интерфейсу определяет,
+        какие способы реализации угроз могут быть использованы нарушителем.
+    </p>
+
+    <form method="POST" action="/api/wizard/step3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <fieldset>
+            <legend>Доступные интерфейсы</legend>
+            <div class="grid two">
+                {% for code, item in interfaces.items() %}
+                <label class="check">
+                    <input type="checkbox" name="interfaces" value="{{ code }}"
+                           {% if code in selected_interfaces %}checked{% endif %}>
+                    <span>
+                        <span class="title">{{ item.name }}</span>
+                        <span class="desc">{{ item.description }}</span>
+                        {% if item.methods %}
+                        <span class="desc">Способы реализации:
+                            {% for method in item.methods %}<span class="tag">{{ method }}</span>{% endfor %}
+                        </span>
+                        {% endif %}
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+
+        <div class="nav-actions">
+            <a href="/api/wizard/step/2" class="btn secondary">← Назад</a>
+            <button type="submit" class="btn">Далее →</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

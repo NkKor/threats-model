@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Шаг 5. Предпросмотр отчёта{% endblock %}
+
+{% block content %}
+<div class="panel">
+    <h2>{{ report_title }}</h2>
+    <p class="hint">
+        Шаг 5. Предпросмотр итоговых таблиц. Состав колонок и заголовки берутся из
+        <code>data/report-rules.txt</code> — файл можно править в блокноте, изменения
+        применяются сразу. Данные опроса не сохраняются на сервере: отчёт попадает
+        в файл только по кнопке экспорта.
+    </p>
+
+    <div class="stats" style="margin-bottom: 18px;">
+        <div class="stat">
+            <div class="value">{{ report.total_threats }}</div>
+            <div class="label">УБИ в перечне из {{ report.total_corpus }}</div>
+        </div>
+        <div class="stat">
+            <div class="value">{{ report.risk_table|length }}</div>
+            <div class="label">применимых последствий</div>
+        </div>
+        <div class="stat">
+            <div class="value">{{ user_profile.system.system_types|length }}</div>
+            <div class="label">типов ИС</div>
+        </div>
+        <div class="stat">
+            <div class="value">{{ user_profile.selected_objects|length }}</div>
+            <div class="label">объектов воздействия</div>
+        </div>
+        <div class="stat">
+            <div class="value">{{ user_profile.interfaces|length }}</div>
+            <div class="label">интерфейсов</div>
+        </div>
+    </div>
+
+    <div class="nav-actions no-print">
+        <div class="inline">
+            <a href="/api/reports/export.xlsx" class="btn success">Экспорт в таблицу (XLSX)</a>
+            <a href="/api/reports/export.docx" class="btn success">Экспорт в документ (DOCX)</a>
+            <button type="button" class="btn secondary" onclick="window.print()">Печать</button>
+        </div>
+        <form method="POST" action="/api/wizard/clear"
+              onsubmit="return confirm('Очистить все введённые данные?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn secondary">Очистить данные</button>
+        </form>
+    </div>
+</div>
+
+{% if show_profile %}
+<div class="panel">
+    <h2>Профиль системы</h2>
+    <table class="report">
+        <tbody>
+        <tr>
+            <th style="width: 260px;">Типы информационных систем</th>
+            <td>
+                {% for code in user_profile.system.system_types %}<span class="tag">{{ code }}</span>{% else %}<span class="muted">не указаны</span>{% endfor %}
+            </td>
+        </tr>
+        <tr>
+            <th>Технологические признаки</th>
+            <td>
+                {% for code in user_profile.system.technologies %}<span class="tag">{{ code }}</span>{% else %}<span class="muted">не указаны</span>{% endfor %}
+            </td>
+        </tr>
+        <tr>
+            <th>Персональные данные</th>
+            <td>
+                {{ 'обрабатываются' if user_profile.system.processes_pd else 'не обрабатываются' }}
+                {% if user_profile.system.pd_security_level %}, уровень защищённости {{ user_profile.system.pd_security_level }}{% endif %}
+            </td>
+        </tr>
+        <tr>
+            <th>Внешние нарушители</th>
+            <td>
+                {% for code in user_profile.violators.external_types %}<span class="tag">{{ code }}</span>{% else %}<span class="muted">не указаны</span>{% endfor %}
+                {% if user_profile.violators.external_level %}
+                <div>Уровень возможностей: <strong>{{ user_profile.violators.external_level }}</strong></div>
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <th>Внутренние нарушители</th>
+            <td>
+                {% for code in user_profile.violators.internal_types %}<span class="tag">{{ code }}</span>{% else %}<span class="muted">не указаны</span>{% endfor %}
+                {% if user_profile.violators.internal_level %}
+                <div>Уровень возможностей: <strong>{{ user_profile.violators.internal_level }}</strong></div>
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <th>Интерфейсы</th>
+            <td>{% for code in user_profile.interfaces %}<span class="tag">{{ code }}</span>{% else %}<span class="muted">не указаны</span>{% endfor %}</td>
+        </tr>
+        <tr>
+            <th>Объекты воздействия</th>
+            <td>{% for code in user_profile.selected_objects %}<span class="tag">{{ code }}</span>{% else %}<span class="muted">не указаны</span>{% endfor %}</td>
+        </tr>
+        <tr>
+            <th>Виды воздействия</th>
+            <td>{% for code in user_profile.selected_impacts %}<span class="tag">{{ code }}</span>{% else %}<span class="muted">не ограничено</span>{% endfor %}</td>
+        </tr>
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% for key, table in tables.items() %}
+<div class="panel">
+    <h2>{{ table.title }}</h2>
+
+    {% if key == 'table2' %}
+    <div class="no-print inline" style="margin-bottom: 12px;">
+        <input type="text" id="threat-search"
+               placeholder="Поиск по идентификатору, названию, объекту, последствию..."
+               style="max-width: 520px;">
+        <span class="muted">показано <span id="threat-visible">{{ table.rows|length }}</span> из {{ table.rows|length }}</span>
+    </div>
+    {% endif %}
+
+    <div class="table-scroll">
+        <table class="report" {% if key == 'table2' %}id="threat-table"{% endif %}>
+            <thead>
+            <tr>
+                {% for column in table.table.columns %}<th>{{ column.header }}</th>{% endfor %}
+            </tr>
+            </thead>
+            <tbody>
+            {% for row in table.rows %}
+            <tr>
+                {% for cell in row %}<td>{{ cell }}</td>{% endfor %}
+            </tr>
+            {% else %}
+            <tr><td colspan="{{ table.table.columns|length }}" class="muted">Нет данных по выбранным критериям.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="panel">
+    <div class="alert error">
+        Ни одна таблица не сформирована. Проверьте файл правил <code>data/report-rules.txt</code>.
+    </div>
+</div>
+{% endfor %}
+
+<div class="nav-actions no-print">
+    <a href="/api/wizard/step/4" class="btn secondary">← Назад к объектам</a>
+    <a href="/api/wizard/" class="btn secondary">В начало опроса</a>
+</div>
+
+<script>
+    // Поиск по перечню УБИ (без обращения к серверу)
+    (function () {
+        const input = document.getElementById('threat-search');
+        const table = document.getElementById('threat-table');
+        const counter = document.getElementById('threat-visible');
+        if (!input || !table) { return; }
+        const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.querySelector('td'));
+        function applyFilter() {
+            const query = input.value.trim().toLowerCase();
+            let visible = 0;
+            rows.forEach(row => {
+                const match = !query || row.textContent.toLowerCase().includes(query);
+                row.style.display = match ? '' : 'none';
+                if (match) { visible += 1; }
+            });
+            if (counter) { counter.textContent = visible; }
+        }
+        input.addEventListener('input', applyFilter);
+        applyFilter();
+    })();
+</script>
+{% endblock %}

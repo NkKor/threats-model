@@ -1,0 +1,56 @@
+# Технологические признаки системы и соответствующие объекты воздействия
+# Файл сгенерирован scripts/import_sources.py — не редактировать вручную.
+
+technologies:
+  cloud:
+    name: Облачные технологии
+    objects:
+    - О19
+    - О20
+  virtualization:
+    name: Виртуализация
+    objects:
+    - О5
+    - О6
+    - О9
+  docker:
+    name: Docker / контейнеры
+    objects:
+    - О1
+    - О21
+  grid:
+    name: Грид-системы
+    objects:
+    - О10
+    - О38
+  mobile:
+    name: Мобильные устройства
+    objects:
+    - О16
+  ics:
+    name: Промышленные системы (ICS/SCADA)
+    objects:
+    - О24
+  smartcard:
+    name: Смарт-карты и аппаратная аутентификация
+    objects:
+    - О32
+  ml:
+    name: Искусственный интеллект и машинное обучение
+    objects:
+    - О17
+    - О37
+  bigdata:
+    name: Большие данные
+    objects:
+    - О36
+  supercomputer:
+    name: Суперкомпьютеры
+    objects:
+    - О8
+    - О35
+  removable_media:
+    name: Съёмные носители информации
+    objects:
+    - О13
+    - О18

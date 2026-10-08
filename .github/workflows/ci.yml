@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: threat-modeler
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: threat-modeler/requirements.txt
+
+      - name: Зависимости
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Инициализация базы данных из канонических данных
+        run: python -m app.db.init --reset
+
+      - name: Проверка источников (если выложены в репозиторий)
+        run: |
+          if [ -d ../справочники ]; then
+            python -m scripts.import_sources --check
+          else
+            echo "Каталог источников не найден — проверка пропущена"
+          fi
+
+      - name: Тесты
+        run: pytest -p no:cacheprovider
+
+      - name: Смоук-тест HTTP (опрос → предпросмотр → экспорт)
+        run: |
+          uvicorn app.main:app --host 127.0.0.1 --port 8090 &
+          SERVER_PID=$!
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8090/health >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          python scripts/smoke_http.py --base http://127.0.0.1:8090
+          STATUS=$?
+          kill $SERVER_PID
+          exit $STATUS

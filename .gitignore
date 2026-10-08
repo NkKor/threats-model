@@ -14,8 +14,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
+/lib/
+/lib64/
 parts/
 sdist/
 var/
@@ -216,3 +216,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- Проект «Генератор моделей угроз» ---
+# Локальная БД и рабочие каталоги сервиса
+threat-modeler/data/*.db
+threat-modeler/data/*.db-journal
+threat-modeler/reports/
+# Промежуточные артефакты разбора источников
+threat-modeler/extracted_tables.yaml
+_work/
+# Временные файлы Word/Excel
+~$*
+

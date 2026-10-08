@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Генератор моделей угроз безопасности информации{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<header class="site-header">
+    <div class="inner">
+        <h1>Генератор моделей угроз безопасности информации</h1>
+        <nav>
+            <a href="/api/wizard/">Опрос</a>
+            <a href="/api/wizard/step/5">Отчёт</a>
+            <a href="/api/reference/">Справочники</a>
+            <a href="/docs">API</a>
+        </nav>
+    </div>
+</header>
+
+{% if step %}
+<div class="progress-bar">
+    <div class="inner">
+        <span>Шаг {{ step }} из 5</span>
+        <div class="progress-track">
+            <div class="progress-fill" style="width: {{ (step / 5 * 100)|round|int }}%"></div>
+        </div>
+        <span>{{ (step / 5 * 100)|round|int }}%</span>
+    </div>
+</div>
+{% endif %}
+
+<main class="container">
+    {% if errors %}
+    <div class="alert error">
+        <strong>Проверьте введённые данные:</strong>
+        <ul>
+            {% for error in errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% if warnings %}
+    <div class="alert warning">
+        <strong>Обратите внимание:</strong>
+        <ul>
+            {% for warning in warnings %}<li>{{ warning }}</li>{% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="site-footer">
+    Локальный сервис формирования модели угроз по методике ФСТЭК (2021).
+    Данные опроса хранятся только в текущей сессии браузера.
+</footer>
+
+{% block scripts %}{% endblock %}
+</body>
+</html>

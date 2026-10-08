@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Шаг 2. Нарушители{% endblock %}
+
+{% block content %}
+<div class="panel">
+    <h2>Шаг 2. Нарушители</h2>
+    <p class="hint">
+        Отметьте виды нарушителей и укажите уровень их возможностей (Н1 — базовые, Н4 — высокие).
+        Уровень возможностей сравнивается с уровнями, указанными для каждой УБИ в сводной таблице.
+    </p>
+
+    <form method="POST" action="/api/wizard/step2">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <fieldset>
+            <legend>Внешние нарушители</legend>
+            <div class="grid">
+                {% for code, item in violator_types_external.items() %}
+                <label class="check">
+                    <input type="checkbox" name="external_types" value="{{ code }}"
+                           data-level="{{ item.level or '' }}"
+                           {% if code in (violators.external_types or []) %}checked{% endif %}>
+                    <span>
+                        <span class="title">{{ item.name }}</span>
+                        <span class="desc">
+                            {% if item.level %}Уровень возможностей: <strong>{{ item.level }}</strong>{% endif %}
+                            {% if item.goals %}<br>{{ item.goals[:180] }}{% endif %}
+                        </span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+            <div style="margin-top: 14px;">
+                <label class="field" for="external_level">Уровень возможностей внешних нарушителей</label>
+                <select id="external_level" name="external_level">
+                    <option value="">Не указан</option>
+                    {% for code, level in violator_levels.items() %}
+                    <option value="{{ code }}" {% if violators.external_level == code %}selected{% endif %}>
+                        {{ code }} — {{ level.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Внутренние нарушители</legend>
+            <div class="grid">
+                {% for code, item in violator_types_internal.items() %}
+                <label class="check">
+                    <input type="checkbox" name="internal_types" value="{{ code }}"
+                           data-level="{{ item.level or '' }}"
+                           {% if code in (violators.internal_types or []) %}checked{% endif %}>
+                    <span>
+                        <span class="title">{{ item.name }}</span>
+                        <span class="desc">
+                            {% if item.level %}Уровень возможностей: <strong>{{ item.level }}</strong>{% endif %}
+                            {% if item.goals %}<br>{{ item.goals[:180] }}{% endif %}
+                        </span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+            <div style="margin-top: 14px;">
+                <label class="field" for="internal_level">Уровень возможностей внутренних нарушителей</label>
+                <select id="internal_level" name="internal_level">
+                    <option value="">Не указан</option>
+                    {% for code, level in violator_levels.items() %}
+                    <option value="{{ code }}" {% if violators.internal_level == code %}selected{% endif %}>
+                        {{ code }} — {{ level.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+        </fieldset>
+
+        <div class="nav-actions">
+            <div class="inline">
+                <a href="/api/wizard/step/1" class="btn secondary">← Назад</a>
+                <button type="button" class="btn secondary" onclick="fillLevels()">
+                    Подставить уровень по выбранным нарушителям
+                </button>
+            </div>
+            <button type="submit" class="btn">Далее →</button>
+        </div>
+    </form>
+</div>
+
+<details class="panel">
+    <summary>Справка по уровням возможностей нарушителей</summary>
+    <p class="hint" style="margin-top: 12px;">
+        Данные приведены по файлу «Уровни возможностей нарушителей по УБИ.xlsx».
+        Перечень способов реализации в этом файле использует собственную нумерацию
+        (СП.1 … СП.26) и не совпадает с кодами СП1–СП9, применяемыми в корреляции УБИ.
+    </p>
+    <table class="report" style="margin-top: 12px;">
+        <thead>
+        <tr>
+            <th style="width:70px;">Уровень</th>
+            <th style="width:120px;">Потенциал</th>
+            <th style="width:260px;">Наименование</th>
+            <th style="width:220px;">Виды нарушителей</th>
+            <th>Способы реализации уровня</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for code, level in violator_levels.items() %}
+        <tr>
+            <td>{{ code }}</td>
+            <td>{{ level.potential or '—' }}</td>
+            <td>{{ level.name }}</td>
+            <td>
+                {% for type_code in level.level_violators or [] %}
+                <div>{{ violator_type_names.get(type_code, type_code) }}</div>
+                {% else %}<span class="muted">—</span>{% endfor %}
+            </td>
+            <td>
+                {% for method in level.methods_extended or [] %}
+                <div>{{ method.code }} {{ method.name }}</div>
+                {% else %}<span class="muted">—</span>{% endfor %}
+            </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</details>
+
+<script>
+    // Уровень возможностей по выбранным видам нарушителей: берём максимальный
+    function highestLevel(selector) {
+        let best = '';
+        document.querySelectorAll(selector).forEach(box => {
+            if (!box.checked) { return; }
+            const level = box.dataset.level || '';
+            if (level && (!best || level > best)) { best = level; }
+        });
+        return best;
+    }
+
+    function fillLevels() {
+        const external = highestLevel('input[name="external_types"]');
+        const internal = highestLevel('input[name="internal_types"]');
+        if (external) { document.getElementById('external_level').value = external; }
+        if (internal) { document.getElementById('internal_level').value = internal; }
+        if (!external && !internal) {
+            alert('Сначала отметьте виды нарушителей.');
+        }
+    }
+</script>
+{% endblock %}

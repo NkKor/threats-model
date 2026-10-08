@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Шаг 4. Объекты воздействия{% endblock %}
+
+{% block content %}
+<div class="panel">
+    <h2>Шаг 4. Объекты воздействия</h2>
+    <p class="hint">
+        Выберите объекты воздействия, присутствующие в системе (38 позиций по перечню ФСТЭК).
+        УБИ попадает в отчёт, если хотя бы один из её объектов выбран.
+    </p>
+
+    <form method="POST" action="/api/wizard/step4">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="nav-actions no-print" style="justify-content: flex-start; margin-bottom: 12px;">
+            <button type="button" class="btn secondary" onclick="selectAll(true)">Отметить все</button>
+            <button type="button" class="btn secondary" onclick="selectAll(false)">Снять все</button>
+            {% if selected_technologies %}
+            <button type="button" class="btn secondary" onclick="selectByTechnologies()">
+                Отметить по технологиям шага 1
+            </button>
+            {% endif %}
+        </div>
+
+        <fieldset>
+            <legend>Объекты воздействия <span class="muted">(отмечено: <span id="counter">0</span>)</span></legend>
+            <div class="grid two">
+                {% for object in objects %}
+                <label class="check" data-code="{{ object.code }}" data-technologies="{{ object.technologies }}">
+                    <input type="checkbox" name="selected_objects" value="{{ object.code }}"
+                           {% if object.code in selected_objects %}checked{% endif %}>
+                    <span>
+                        <span class="title">{{ object.num }}. {{ object.name }}</span>
+                        <span class="desc">{{ object.code }}</span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Виды воздействия <span class="muted">(необязательно; ограничивает перечень)</span></legend>
+            <p class="hint" style="margin-top: 0;">
+                Виды воздействия определяются по таблице 3 Методики через негативные последствия
+                выбранных типов ИС. Если снять все отметки, ограничение по видам воздействия не применяется.
+            </p>
+            <div class="grid">
+                {% for code, item in impacts.items() %}
+                <label class="check">
+                    <input type="checkbox" name="selected_impacts" value="{{ code }}"
+                           {% if code in selected_impacts %}checked{% endif %}>
+                    <span>
+                        <span class="title">{{ code }}</span>
+                        <span class="desc">{{ item.name }}</span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+
+        <div class="nav-actions">
+            <a href="/api/wizard/step/3" class="btn secondary">← Назад</a>
+            <button type="submit" class="btn">К отчёту →</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    const technologyMap = {{ technologies | tojson }};
+    const selectedTechnologies = {{ selected_technologies | tojson }};
+
+    function boxes() {
+        return Array.from(document.querySelectorAll('input[name="selected_objects"]'));
+    }
+
+    function updateCounter() {
+        document.getElementById('counter').textContent = boxes().filter(b => b.checked).length;
+    }
+
+    function selectAll(checked) {
+        boxes().forEach(box => { box.checked = checked; });
+        updateCounter();
+    }
+
+    function selectByTechnologies() {
+        const wanted = new Set();
+        Object.keys(technologyMap).forEach(code => {
+            if (selectedTechnologies.includes(code)) {
+                (technologyMap[code].objects || []).forEach(obj => wanted.add(obj));
+            }
+        });
+        boxes().forEach(box => {
+            if (wanted.has(box.value)) { box.checked = true; }
+        });
+        updateCounter();
+    }
+
+    document.querySelectorAll('input[name="selected_objects"]').forEach(box => {
+        box.addEventListener('change', updateCounter);
+    });
+    updateCounter();
+</script>
+{% endblock %}

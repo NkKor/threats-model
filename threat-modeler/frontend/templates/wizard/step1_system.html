@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Шаг 1. Сведения о системе{% endblock %}
+
+{% block content %}
+<div class="panel">
+    <div class="nav-actions" style="align-items: flex-start;">
+        <div>
+            <h2>Шаг 1. Сведения о системе</h2>
+            <p class="hint" style="margin-bottom: 0;">
+                Укажите типы информационных систем и технологические признаки. Типы ИС определяют
+                перечень применимых негативных последствий (таблица 1 отчёта), технологические
+                признаки — предварительный набор объектов воздействия на шаге 4.
+            </p>
+        </div>
+        <form method="POST" action="/api/wizard/clear" class="no-print"
+              onsubmit="return confirm('Очистить все введённые данные и начать заново?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn secondary">Очистить данные</button>
+        </form>
+    </div>
+    <div class="alert info" style="margin-top: 14px;">
+        Данные опроса не сохраняются на сервере: они хранятся только в cookie вашего браузера и
+        удаляются при очистке кэша, закрытии браузера или нажатии кнопки «Очистить данные».
+    </div>
+</div>
+
+<div class="panel">
+    <form method="POST" action="/api/wizard/step1">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <fieldset>
+            <legend>Типы информационных систем <span class="muted">(обязательно, можно несколько)</span></legend>
+            <div class="grid">
+                {% for code, item in system_types.items() %}
+                <label class="check required">
+                    <input type="checkbox" name="system_types" value="{{ code }}"
+                           {% if code in (system.system_types or []) %}checked{% endif %}>
+                    <span>
+                        <span class="title">{{ code }}</span>
+                        <span class="desc">{{ item.description or item.name }}</span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Технологические признаки</legend>
+            <div class="grid">
+                {% for code, item in technologies.items() %}
+                <label class="check">
+                    <input type="checkbox" name="technologies" value="{{ code }}"
+                           {% if code in (system.technologies or []) %}checked{% endif %}>
+                    <span>
+                        <span class="title">{{ item.name }}</span>
+                        <span class="desc">Объекты: {{ item.objects|join(', ') }}</span>
+                    </span>
+                </label>
+                {% endfor %}
+            </div>
+        </fieldset>
+
+        <fieldset>
+            <legend>Персональные данные</legend>
+            <div class="inline" style="margin-bottom: 12px;">
+                <label class="check" style="flex: 1 1 420px;">
+                    <input type="checkbox" id="processes_pd" name="processes_pd"
+                           {% if system.processes_pd %}checked{% endif %}>
+                    <span><span class="title">Система обрабатывает персональные данные</span></span>
+                </label>
+            </div>
+            <label class="field" for="pd_security_level">Уровень защищённости ПДн</label>
+            <select id="pd_security_level" name="pd_security_level">
+                <option value="">Не указан</option>
+                {% for level in [1, 2, 3, 4] %}
+                <option value="{{ level }}" {% if system.pd_security_level == level %}selected{% endif %}>
+                    Уровень {{ level }}{% if level == 1 %} (максимальный){% elif level == 4 %} (минимальный){% endif %}
+                </option>
+                {% endfor %}
+            </select>
+        </fieldset>
+
+        <fieldset>
+            <legend>Сетевые возможности и ответственность</legend>
+            <label class="check" style="margin-bottom: 14px;">
+                <input type="checkbox" name="has_internet_access"
+                       {% if system.has_internet_access %}checked{% endif %}>
+                <span><span class="title">Есть доступ в Интернет</span></span>
+            </label>
+            <label class="field" for="external_responsibility">Организация с внешней ответственностью (если есть)</label>
+            <input type="text" id="external_responsibility" name="external_responsibility"
+                   placeholder="Например: ООО «Кортэл»"
+                   value="{{ system.external_responsibility or '' }}">
+        </fieldset>
+
+        <div class="nav-actions">
+            <span></span>
+            <button type="submit" class="btn">Далее →</button>
+        </div>
+    </form>
+</div>
+{% endblock %}
