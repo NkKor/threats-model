@@ -222,7 +222,7 @@ def test_filter_threats_end_to_end():
         make_threat("УБИ.104", ext_levels=["Н1"], pairs=[make_pair("О4", ("СП1",), ("у3.27",))]),
     ]
     profile = UserProfile(
-        system=SystemProfile(system_types=["ПДн"]),
+        system=SystemProfile(system_types=["ИСПДн"]),
         violators=ViolatorProfile(external_level="Н2"),
         interfaces=["user"],
         selected_objects=["О4"],
@@ -232,20 +232,32 @@ def test_filter_threats_end_to_end():
 
 
 def test_build_report_structure():
-    """Отчёт содержит таблицу 1 и таблицу 2 с заполненными полями."""
+    """Отчёт содержит строки всех семи таблиц; таблица 7 включает весь корпус."""
     threat = make_threat("УБИ.100", int_levels=["Н2"], ext_levels=["Н2", "Н3"], pairs=[make_pair()])
+    other = make_threat("УБИ.900", ext_levels=["Н1"], pairs=[make_pair("О1", ("СП2",), ("у3.27",))])
     profile = UserProfile(
-        system=SystemProfile(system_types=["ПДн"]),
+        system=SystemProfile(system_types=["ИСПДн"]),
         violators=ViolatorProfile(external_level="Н3"),
         interfaces=["user"],
         selected_objects=["О4"],
     )
-    report = build_report(profile, [threat], corpus_size=227)
+    report = build_report(profile, [threat], corpus_size=227, corpus=[threat, other])
 
     assert report.total_threats == 1
     assert report.total_corpus == 227
     assert report.risk_table, "таблица 1 не сформирована"
     assert all(item.risk in {"У1", "У2", "У3"} for item in report.risk_table)
+
+    assert set(report.table_rows) == {f"table{i}" for i in range(1, 8)}
+    assert report.table_rows["table3"], "таблица 3 пуста"
+    assert report.table_rows["table4"], "таблица 4 пуста"
+
+    # Таблица 7: строка есть у каждой УБИ корпуса, данные — только у отобранных
+    by_id = {row["ubi_id"]: row for row in report.table_rows["table7"]}
+    assert set(by_id) == {"УБИ.100", "УБИ.900"}
+    assert by_id["УБИ.100"]["methods"]
+    assert by_id["УБИ.900"]["methods"] == ""
+    assert by_id["УБИ.900"]["objects"] == ""
 
     row = report.threats[0]
     assert row.ubi_id == "УБИ.100"

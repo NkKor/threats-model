@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class SystemProfile(BaseModel):
     """Профиль информационной системы (шаг 1)."""
 
-    system_types: List[str] = Field(default_factory=list, description="Типы ИС (АСУ ТП, ГИС, ПДн и т. д.)")
+    system_types: List[str] = Field(default_factory=list, description="Типы ИС (АСУ ТП, ГИС, ИСПДн и т. д.)")
     technologies: List[str] = Field(default_factory=list, description="Технологические признаки системы")
     processes_pd: bool = Field(default=False, description="Обрабатываются персональные данные")
     pd_security_level: Optional[int] = Field(default=None, ge=1, le=4, description="Уровень защищённости ПДн (1-4)")
@@ -63,11 +63,15 @@ class ThreatView(BaseModel):
 
 
 class ReportPreview(BaseModel):
-    """Результат корреляции: таблица 1 + таблица 2 + сводка."""
+    """Результат корреляции: строки таблиц отчёта и сводка."""
 
     profile: UserProfile
     risk_table: List[ConsequenceView] = Field(default_factory=list)
     threats: List[ThreatView] = Field(default_factory=list)
+    table_rows: dict = Field(
+        default_factory=dict,
+        description="Готовые строки таблиц 1-7 (ключ table1..table7) для правил отчёта",
+    )
     total_threats: int = 0
     total_corpus: int = 0
     statistics: dict = Field(default_factory=dict)

@@ -205,10 +205,7 @@ async def _load_references(session) -> Dict[str, int]:
                 name=item.get("name", ""),
                 description=item.get("description", ""),
                 violators=item.get("violators", ""),
-                potential=item.get("potential", ""),
-                methods_extended=join_csv(
-                    [m["code"] for m in (item.get("methods_extended") or [])]
-                ),
+                methods=join_csv(item.get("methods") or []),
             )
         )
     counts["violator_levels"] = len(levels)
@@ -221,6 +218,7 @@ async def _load_references(session) -> Dict[str, int]:
                 name=item["name"],
                 category=item.get("category", "external"),
                 level=item.get("level", ""),
+                methods=join_csv(item.get("methods") or []),
                 goals=item.get("goals", ""),
             )
         )

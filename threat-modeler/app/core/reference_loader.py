@@ -90,6 +90,17 @@ class ReferenceLoader:
         return cls.load_yaml("violators.yaml").get("violator_levels", {})
 
     @classmethod
+    def get_violator_goals_table(cls) -> List[Dict[str, Any]]:
+        """Таблица целей нарушителей (источник таблицы 5 отчёта)."""
+        return cls.load_yaml("violators.yaml").get("violator_goals_table", [])
+
+    @classmethod
+    def get_violator_name(cls, code: str) -> str:
+        """Наименование вида нарушителя по коду."""
+        item = cls.get_violator_types().get(code) or {}
+        return item.get("name", code)
+
+    @classmethod
     def get_tactics(cls) -> Dict[str, Dict[str, Any]]:
         """Тактики (Т1-Т10) с техниками."""
         return cls.load_yaml("tactics.yaml").get("tactics", {})
@@ -186,6 +197,7 @@ class ReferenceLoader:
             "system_types": cls.get_system_types(),
             "violator_types": cls.get_violator_types(),
             "violator_levels": cls.get_violator_levels(),
+            "violator_goals_table": cls.get_violator_goals_table(),
             "tactics": cls.get_tactics(),
             "interfaces": cls.get_interfaces(),
             "technologies": cls.get_technologies(),

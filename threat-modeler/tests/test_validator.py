@@ -67,15 +67,16 @@ def test_violator_category_is_checked():
     assert any("категории" in error or "относится" in error for error in result.errors)
 
 
-def test_violator_level_is_checked():
-    """Несуществующий уровень возможностей отклоняется."""
-    result = validate_violator_profile({"external_types": [external_violator()], "external_level": "Н9"})
-    assert not result.is_valid
+def test_violator_profile_accepts_types_without_levels():
+    """Уровни возможностей не запрашиваются: они определяются автоматически."""
+    result = validate_violator_profile({"external_types": [external_violator()]})
+    assert result.is_valid
+    assert not result.warnings
 
 
-def test_violator_warns_when_types_without_level():
-    """Отсутствие уровня при выбранных нарушителях даёт предупреждение, а не ошибку."""
-    result = validate_violator_profile({"external_types": [external_violator()], "external_level": None})
+def test_violator_warns_when_no_types():
+    """Отсутствие выбранных нарушителей даёт предупреждение, а не ошибку."""
+    result = validate_violator_profile({})
     assert result.is_valid
     assert result.warnings
 

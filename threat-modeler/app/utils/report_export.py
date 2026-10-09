@@ -44,9 +44,9 @@ def profile_lines(report, rules: ReportRules) -> List[str]:
     ]
 
 
-def _sheet_title(worksheet, title: str, columns: Sequence[Column]) -> None:
-    worksheet.cell(row=1, column=1, value=title).font = Font(bold=True, size=12, name=CELL_FONT)
-    worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(len(columns), 1))
+def _header_rows(table: Dict[str, Any]):
+    """Строки шапки таблицы (с учётом групповых заголовков)."""
+    return table.get("header_rows") or table["table"].header_rows()
 
 
 # --------------------------------------------------------------------------- #
@@ -54,25 +54,40 @@ def _sheet_title(worksheet, title: str, columns: Sequence[Column]) -> None:
 # --------------------------------------------------------------------------- #
 
 def _write_sheet(worksheet, table: Dict[str, Any]) -> None:
-    """Заполнить лист по правилам таблицы."""
+    """Заполнить лист по правилам таблицы (в том числе объединённой шапкой)."""
     columns: List[Column] = table["table"].columns
     rows: List[List[str]] = table["rows"]
+    header_rows = _header_rows(table)
     border = Side(style="thin")
     full_border = Border(left=border, right=border, top=border, bottom=border)
     header_font = Font(bold=True, size=11, name=CELL_FONT)
     cell_font = Font(size=10, name=CELL_FONT)
     header_fill = PatternFill(start_color="E0E0E0", end_color="E0E0E0", fill_type="solid")
+    header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    _sheet_title(worksheet, table["title"], columns)
+    worksheet.cell(row=1, column=1, value=table["title"]).font = Font(bold=True, size=12, name=CELL_FONT)
+    worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max(len(columns), 1))
 
-    for index, column in enumerate(columns, start=1):
-        cell = worksheet.cell(row=2, column=index, value=column.header)
-        cell.font = header_font
-        cell.fill = header_fill
-        cell.border = full_border
-        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    # Шапка: одна или две строки, ячейки при необходимости объединяются
+    for row_offset, header_row in enumerate(header_rows):
+        for header_cell in header_row:
+            col = header_cell.col + 1
+            cell = worksheet.cell(row=2 + row_offset, column=col)
+            cell.value = header_cell.text
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = full_border
+            cell.alignment = header_align
+            if header_cell.colspan > 1 or header_cell.rowspan > 1:
+                worksheet.merge_cells(
+                    start_row=2 + row_offset,
+                    start_column=col,
+                    end_row=2 + row_offset + header_cell.rowspan - 1,
+                    end_column=col + header_cell.colspan - 1,
+                )
 
-    for row_index, row in enumerate(rows, start=3):
+    data_start = 2 + len(header_rows)
+    for row_index, row in enumerate(rows, start=data_start):
         for column_index, value in enumerate(row, start=1):
             column = columns[column_index - 1]
             cell = worksheet.cell(row=row_index, column=column_index, value=value)
@@ -82,7 +97,7 @@ def _write_sheet(worksheet, table: Dict[str, Any]) -> None:
 
     for index, column in enumerate(columns, start=1):
         worksheet.column_dimensions[get_column_letter(index)].width = column.width
-    worksheet.freeze_panes = "A3"
+    worksheet.freeze_panes = f"A{data_start}"
 
 
 def build_xlsx(report, tables: Dict[str, Dict[str, Any]], rules: ReportRules) -> bytes:
@@ -103,7 +118,7 @@ def build_xlsx(report, tables: Dict[str, Dict[str, Any]], rules: ReportRules) ->
 # DOCX
 # --------------------------------------------------------------------------- #
 
-def _style_table(table) -> None:
+def _style_table(table, header_height: int = 1) -> None:
     """Оформление таблицы Word: границы, шрифт, выравнивание."""
     table.style = "Table Grid"
     for row_index, row in enumerate(table.rows):
@@ -113,7 +128,7 @@ def _style_table(table) -> None:
                 for run in paragraph.runs:
                     run.font.name = CELL_FONT
                     run.font.size = Pt(9)
-                    run.font.bold = row_index == 0
+                    run.font.bold = row_index < header_height
             cell.vertical_alignment = 1
 
 
@@ -147,16 +162,24 @@ def build_docx(report, tables: Dict[str, Dict[str, Any]], rules: ReportRules) ->
     for table in tables.values():
         columns: List[Column] = table["table"].columns
         rows: List[List[str]] = table["rows"]
+        header_rows = _header_rows(table)
         document.add_paragraph()
         _add_heading(document, table["title"], size=12)
-        word_table = document.add_table(rows=1, cols=len(columns))
-        for index, column in enumerate(columns):
-            word_table.rows[0].cells[index].text = column.header
-        for row in rows:
-            cells = word_table.add_row().cells
-            for index, value in enumerate(row):
-                cells[index].text = value
-        _style_table(word_table)
+        word_table = document.add_table(rows=len(header_rows) + len(rows), cols=len(columns))
+        table_rows = word_table.rows
+        for row_offset, header_row in enumerate(header_rows):
+            header_cells = table_rows[row_offset].cells
+            for header_cell in header_row:
+                col = header_cell.col
+                target = header_cells[col]
+                target.text = header_cell.text
+                if header_cell.colspan > 1 or header_cell.rowspan > 1:
+                    target.merge(table_rows[row_offset + header_cell.rowspan - 1].cells[col + header_cell.colspan - 1])
+        for row_index, row in enumerate(rows, start=len(header_rows)):
+            data_cells = table_rows[row_index].cells
+            for column_index, value in enumerate(row):
+                data_cells[column_index].text = value
+        _style_table(word_table, header_height=len(header_rows))
 
     output = BytesIO()
     document.save(output)

@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import get_db
-from app.core.correlation import build_report, filter_threats
+from app.core.correlation import build_report, compute_category_levels, filter_threats
 from app.core.reference_loader import ReferenceLoader
 from app.core.report_rules import ReportRulesError, build_tables, load_rules
 from app.core.validator import validate_user_profile
@@ -113,6 +113,7 @@ async def step_context(request: Request, step: int, db: AsyncSession) -> Dict[st
             "violator_types_internal": {k: v for k, v in violator_types.items() if v.get("category") == "internal"},
             "violator_type_names": {k: v["name"] for k, v in violator_types.items()},
             "violator_levels": ReferenceLoader.get_violator_levels(),
+            "method_names": {code: item.get("name", "") for code, item in ReferenceLoader.get_methods().items()},
             "violators": profile.get("violators") or {},
         }
     if step == 3:
@@ -212,11 +213,14 @@ async def wizard_step2(request: Request, db: AsyncSession = Depends(get_db)):
     form_data = await request.form()
     check_csrf(request, form_data)
 
+    external_types = form_data.getlist("external_types")
+    internal_types = form_data.getlist("internal_types")
+    external_level, internal_level = compute_category_levels(external_types, internal_types)
     violator_profile = {
-        "external_types": form_data.getlist("external_types"),
-        "external_level": form_data.get("external_level") or None,
-        "internal_types": form_data.getlist("internal_types"),
-        "internal_level": form_data.get("internal_level") or None,
+        "external_types": external_types,
+        "external_level": external_level,
+        "internal_types": internal_types,
+        "internal_level": internal_level,
     }
 
     from app.core.validator import validate_violator_profile
@@ -249,7 +253,8 @@ async def wizard_step3(request: Request, db: AsyncSession = Depends(get_db)):
     form_data = await request.form()
     check_csrf(request, form_data)
 
-    interfaces = form_data.getlist("interfaces")
+    # Все типы интерфейсов считаются доступными по умолчанию: выбор убран
+    interfaces = list(ReferenceLoader.get_interfaces())
 
     from app.core.validator import validate_interfaces
 
@@ -282,7 +287,8 @@ async def wizard_step4(request: Request, db: AsyncSession = Depends(get_db)):
     check_csrf(request, form_data)
 
     selected_objects = form_data.getlist("selected_objects")
-    selected_impacts = form_data.getlist("selected_impacts")
+    # Все виды воздействия применяются по умолчанию: выбор убран
+    selected_impacts = list(ReferenceLoader.get_impacts())
 
     from app.core.validator import validate_step4
 
@@ -330,7 +336,7 @@ async def build_current_report(request: Request, db: AsyncSession, strict: bool 
         # Шаг 5 читается из сессии; отчёт можно строить и при незаполненных шагах 2-3.
     threats = await get_all_threats(db)
     filtered = filter_threats(threats, profile)
-    report = build_report(profile, filtered, len(threats))
+    report = build_report(profile, filtered, len(threats), corpus=threats)
     return profile, threats, report
 
 
@@ -341,8 +347,8 @@ def report_context(profile: UserProfile, report) -> Dict[str, Any]:
         warnings.append("Объекты воздействия не выбраны — перечень УБИ не ограничен по объектам.")
     if not profile.system.system_types:
         warnings.append("Типы ИС не выбраны — ограничение по негативным последствиям не применяется.")
-    if not profile.violators.external_level and not profile.violators.internal_level:
-        warnings.append("Уровни возможностей нарушителей не указаны — фильтр по нарушителям не применяется.")
+    if not (profile.violators.external_types or profile.violators.internal_types):
+        warnings.append("Виды нарушителей не выбраны — фильтр по нарушителям не применяется.")
     if not profile.interfaces:
         warnings.append("Интерфейсы не выбраны — ограничение по способам реализации не применяется.")
 
@@ -375,7 +381,7 @@ async def render_report(request: Request, db: AsyncSession) -> HTMLResponse:
     profile = build_profile(get_profile_data(request))
     threats = await get_all_threats(db)
     filtered = filter_threats(threats, profile)
-    report = build_report(profile, filtered, len(threats))
+    report = build_report(profile, filtered, len(threats), corpus=threats)
 
     return request.app.templates.TemplateResponse(
         request,

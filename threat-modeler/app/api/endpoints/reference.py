@@ -36,7 +36,7 @@ async def get_violators():
     """Виды нарушителей с уровнями возможностей.
 
     Для каждого вида нарушителя указан уровень Н1-Н4, для каждого уровня —
-    потенциал и расширенный перечень способов реализации из файла
+    возможность и перечень способов реализации (СП1-СП9) из файла
     «Уровни возможностей нарушителей по УБИ.xlsx».
     """
     levels = ReferenceLoader.get_violator_levels()
@@ -47,10 +47,11 @@ async def get_violators():
                 "code": item.get("code"),
                 "rank": item.get("rank"),
                 "name": item.get("name"),
-                "potential": item.get("potential", ""),
-                "methods_extended": item.get("methods_extended") or [],
+                "description": item.get("description", ""),
+                "methods": item.get("methods") or [],
                 "violator_types": item.get("level_violators") or [],
             }
             for code, item in levels.items()
         },
+        "violator_goals_table": ReferenceLoader.get_violator_goals_table(),
     }

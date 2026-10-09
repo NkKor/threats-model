@@ -8,8 +8,9 @@
 * 7 видов воздействия В1-В7 (``виды воздействия.txt``);
 * виды риска У1-У3 и 67 негативных последствий уX.Y
   (``ИС и негативные последствия.xlsx`` + ``негативные последствия.txt``);
-* 14 типов информационных систем (``информационные системы.txt``);
-* 13 видов нарушителей (с уровнем возможностей Н1-Н4) и 4 уровня возможностей;
+* 13 типов информационных систем (``информационные системы.txt``);
+* 13 видов нарушителей (с уровнем возможностей Н1-Н4 и способами СП1-СП9)
+  и 4 уровня возможностей;
 * тактики Т1-Т10 и 144 техники;
 * 10 типов интерфейсов с выведенным перечнем способов реализации;
 * 227 УБИ и 506 связей «УБИ x объект» с индивидуальным набором
@@ -139,8 +140,7 @@ class ViolatorLevel(Base):
     name = Column(Text, nullable=False)
     description = Column(Text, default="")
     violators = Column(Text, default="")
-    potential = Column(Text, default="")           # Низкий / Средний / Высокий
-    methods_extended = Column(Text, default="")    # CSV кодов расширенного перечня (СП.N)
+    methods = Column(Text, default="")             # CSV кодов способов реализации (СП1-СП9)
 
 
 class ViolatorType(Base):
@@ -152,6 +152,7 @@ class ViolatorType(Base):
     name = Column(Text, nullable=False)
     category = Column(String, nullable=False, index=True)  # external | internal
     level = Column(String, default="", index=True)         # уровень возможностей Н1-Н4
+    methods = Column(Text, default="")                     # CSV способов реализации (СП1-СП9)
     goals = Column(Text, default="")
 
 

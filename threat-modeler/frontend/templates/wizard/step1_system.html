@@ -89,7 +89,7 @@
             </label>
             <label class="field" for="external_responsibility">Организация с внешней ответственностью (если есть)</label>
             <input type="text" id="external_responsibility" name="external_responsibility"
-                   placeholder="Например: ООО «Кортэл»"
+                   placeholder="Например: ООО «НТЦ Галэкс»"
                    value="{{ system.external_responsibility or '' }}">
         </fieldset>
 
@@ -99,4 +99,16 @@
         </div>
     </form>
 </div>
+
+<script>
+    // Тип ИС «ИСПДн» и флаг «обрабатывает персональные данные» связаны:
+    // установка любого из них автоматически устанавливает второй.
+    (function () {
+        const ispdn = document.querySelector('input[name="system_types"][value="ИСПДн"]');
+        const processes = document.getElementById('processes_pd');
+        if (!ispdn || !processes) { return; }
+        ispdn.addEventListener('change', function () { processes.checked = ispdn.checked; });
+        processes.addEventListener('change', function () { ispdn.checked = processes.checked; });
+    })();
+</script>
 {% endblock %}

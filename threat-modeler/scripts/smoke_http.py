@@ -66,7 +66,7 @@ def main(argv=None) -> int:
             "/api/wizard/step1",
             [
                 ("csrf_token", token),
-                ("system_types", "ПДн"),
+                ("system_types", "ИСПДн"),
                 ("system_types", "ГИС"),
                 ("technologies", "cloud"),
                 ("technologies", "virtualization"),
@@ -85,23 +85,13 @@ def main(argv=None) -> int:
                 ("csrf_token", csrf(page.text)),
                 ("external_types", "otdelnye_fizicheskie_lica_hakery"),
                 ("internal_types", "avtorizovannye_polzovateli_sistem_i_setey"),
-                ("external_level", "Н3"),
-                ("internal_level", "Н2"),
             ],
         )
         check(response.status_code == 303, f"шаг 2 -> {response.status_code}")
 
         page = client.get("/api/wizard/step/3")
-        response = post_form(
-            client,
-            "/api/wizard/step3",
-            [
-                ("csrf_token", csrf(page.text)),
-                ("interfaces", "external_network"),
-                ("interfaces", "web"),
-                ("interfaces", "user"),
-            ],
-        )
+        check("Доступные интерфейсы" in page.text, "шаг 3 (интерфейсы) отрисован")
+        response = post_form(client, "/api/wizard/step3", [("csrf_token", csrf(page.text))])
         check(response.status_code == 303, f"шаг 3 -> {response.status_code}")
 
         page = client.get("/api/wizard/step/4")
@@ -115,15 +105,13 @@ def main(argv=None) -> int:
                 ("selected_objects", "О31"),
                 ("selected_objects", "О19"),
                 ("selected_objects", "О5"),
-                ("selected_impacts", "В1"),
-                ("selected_impacts", "В2"),
-                ("selected_impacts", "В3"),
             ],
         )
         check(response.status_code == 303, f"шаг 4 -> {response.status_code}")
 
         report_page = client.get("/api/wizard/step/5")
-        check("Таблица 1" in report_page.text and "Таблица 2" in report_page.text, "предпросмотр содержит таблицы 1 и 2")
+        for number in range(1, 8):
+            check(f"Таблица {number}" in report_page.text, f"предпросмотр содержит таблицу {number}")
         check("УБИ." in report_page.text, "предпросмотр содержит строки УБИ")
         check("Виды воздействия" in report_page.text, "предпросмотр содержит виды воздействия")
         check('id="threat-search"' in report_page.text, "на странице отчёта есть поиск по перечню")
@@ -146,7 +134,7 @@ def main(argv=None) -> int:
         clean = post_form(client, "/api/wizard/clear", [("csrf_token", csrf(report_page.text))])
         check(clean.status_code == 303, f"очистка данных -> {clean.status_code}")
         fresh = client.get("/api/wizard/")
-        check(fresh.status_code == 200 and "checked" not in fresh.text, "после очистки форма пустая")
+        check(fresh.status_code == 200 and "checked>" not in fresh.text, "после очистки форма пустая")
         check(client.get("/api/reports/export.xlsx").status_code == 400, "после очистки экспорт недоступен")
 
     print("\nИтог:", "все проверки пройдены" if not failures else f"ошибок: {failures}")

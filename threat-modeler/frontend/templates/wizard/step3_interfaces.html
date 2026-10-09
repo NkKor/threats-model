@@ -6,19 +6,18 @@
     <h2>Шаг 3. Интерфейсы объектов воздействия</h2>
     <p class="hint">
         Типы интерфейсов соответствуют методике ФСТЭК. Возможность доступа к интерфейсу определяет,
-        какие способы реализации угроз могут быть использованы нарушителем.
+        какие способы реализации угроз могут быть использованы нарушителем. Все перечисленные
+        интерфейсы считаются доступными по умолчанию — отдельный выбор не требуется.
     </p>
 
     <form method="POST" action="/api/wizard/step3">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
         <fieldset>
-            <legend>Доступные интерфейсы</legend>
+            <legend>Доступные интерфейсы (все)</legend>
             <div class="grid two">
                 {% for code, item in interfaces.items() %}
-                <label class="check">
-                    <input type="checkbox" name="interfaces" value="{{ code }}"
-                           {% if code in selected_interfaces %}checked{% endif %}>
+                <div class="check">
                     <span>
                         <span class="title">{{ item.name }}</span>
                         <span class="desc">{{ item.description }}</span>
@@ -28,7 +27,7 @@
                         </span>
                         {% endif %}
                     </span>
-                </label>
+                </div>
                 {% endfor %}
             </div>
         </fieldset>

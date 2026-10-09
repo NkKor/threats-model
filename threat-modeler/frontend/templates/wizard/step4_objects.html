@@ -39,21 +39,15 @@
         </fieldset>
 
         <fieldset>
-            <legend>Виды воздействия <span class="muted">(необязательно; ограничивает перечень)</span></legend>
+            <legend>Виды воздействия</legend>
             <p class="hint" style="margin-top: 0;">
-                Виды воздействия определяются по таблице 3 Методики через негативные последствия
-                выбранных типов ИС. Если снять все отметки, ограничение по видам воздействия не применяется.
+                Все виды воздействия (В1–В7) учитываются по умолчанию — отдельный выбор не требуется.
+                Конкретные виды воздействия для отчёта определяются по таблице 3 Методики через
+                негативные последствия выбранных типов ИС.
             </p>
-            <div class="grid">
+            <div class="inline">
                 {% for code, item in impacts.items() %}
-                <label class="check">
-                    <input type="checkbox" name="selected_impacts" value="{{ code }}"
-                           {% if code in selected_impacts %}checked{% endif %}>
-                    <span>
-                        <span class="title">{{ code }}</span>
-                        <span class="desc">{{ item.name }}</span>
-                    </span>
-                </label>
+                <span class="tag">{{ code }} — {{ item.name }}</span>
                 {% endfor %}
             </div>
         </fieldset>

@@ -72,7 +72,7 @@ SOURCES = {
     "violators_txt": REPO_DIR / "справочники" / "нарушители.txt",
     "systems_txt": REPO_DIR / "справочники" / "информационные системы.txt",
     "tactics_xlsx": REPO_DIR / "справочники" / "тактики_техники.csv",
-    "levels_xlsx": REPO_DIR / "Уровни возможностей нарушителей по УБИ.xlsx",
+    "levels_xlsx": REPO_DIR / "справочники" / "Уровни возможностей нарушителей по УБИ.xlsx",
     "summary_docx": REPO_DIR / "сводная таблица.docx",
     "ubi_object_docx": REPO_DIR / "УБИ-объект.docx",
     "violator_types_docx": PROJECT_DIR / "data" / "lib" / "Виды нарушителей.docx",
@@ -201,18 +201,21 @@ VIOLATOR_TYPE_ALIASES = {
 }
 
 # Расхождения формулировок между «нарушители.txt» и
-# «Уровни возможностей нарушителей по УБИ.xlsx»
+# «Уровни возможностей нарушителей по УБИ.xlsx» (новый регламент, СП1-СП9).
 VIOLATOR_LEVEL_ALIASES = {
-    "преступные группы (криминальные структуры)": (
-        "преступные группы (два лица и более, действующие по единому плану)"
-    ),
+    "преступные группы (криминальные структуры)": "преступные группы",
     "отдельные физические лица (хакеры)": "физическое лицо (хакер)",
     "бывшие (уволенные) работники (пользователи)": "бывшие работники (пользователи)",
     "поставщики услуг связи": "поставщики вычислительных услуг, услуг связи",
+    "лица, обеспечивающие поставку программных, программно-аппаратных средств, обеспечивающих систем": (
+        "лица, обеспечивающие поставку программных, программно-аппаратных средств"
+    ),
+    "лица, привлекаемые для установки, настройки, испытаний, пусконаладочных и иных видов работ": (
+        "лица, привлекаемые для установки, настройки, испытаний"
+    ),
     "лица, обеспечивающие функционирование систем и сетей или обеспечивающих систем оператора "
     "(администрация, охрана, уборщики и др.)": (
-        "лица, обеспечивающие функционирование систем и сетей или обеспечивающих систем "
-        "(администрация, охрана, уборщики и т.д.)"
+        "лица, обеспечивающие функционирование систем и сетей (администрация, охрана, уборщики)"
     ),
 }
 
@@ -229,7 +232,7 @@ def normalize_name(value: str) -> str:
 
 def read_text(path: Path) -> str:
     raw = path.read_bytes()
-    for enc in ("utf-8", "cp1251"):
+    for enc in ("utf-8-sig", "utf-8", "cp1251"):
         try:
             return raw.decode(enc)
         except UnicodeDecodeError:
@@ -364,8 +367,8 @@ def parse_system_types(issues: Issues) -> Dict[str, Dict[str, str]]:
     types: "OrderedDict[str, Dict[str, str]]" = OrderedDict()
     for name in names:
         types[name] = {"code": name, "name": name, "description": descriptions.get(name, "")}
-    if len(types) != 14:
-        issues.add(f"типы ИС: ожидалось 14, получено {len(types)}")
+    if len(types) != 13:
+        issues.add(f"типы ИС: ожидалось 13, получено {len(types)}")
     missing_desc = [k for k, v in types.items() if not v["description"]]
     if missing_desc:
         issues.add(f"типы ИС без описания: {missing_desc}")
@@ -498,7 +501,12 @@ def parse_consequences_xlsx(issues: Issues) -> Dict[str, Dict[str, Any]]:
 
 
 def parse_conditions(value: str) -> List[str]:
-    """Выделить типы ИС из строки «Условия принадлежности»."""
+    """Выделить типы ИС из строки «Условия принадлежности».
+
+    В обновлённом перечне типов ИС позиция «ПДн» удалена: системы, обрабатывающие
+    персональные данные, описываются типом «ИСПДн». Поэтому упоминание «ПДн» в
+    условиях принадлежности последствий приводится к «ИСПДн».
+    """
     known = [
         "ГИС избирательных комиссий",
         "ИС обороны и безопасности",
@@ -511,7 +519,6 @@ def parse_conditions(value: str) -> List[str]:
         "веб-ресурс",
         "АСУ ТП",
         "ИСПДн",
-        "ПДн",
         "ГИС",
         "КИИ",
         "КТ",
@@ -525,8 +532,9 @@ def parse_conditions(value: str) -> List[str]:
     # «веб-ресурс» в источнике — синоним веб-портала
     if "веб-ресурс" in found and "веб-портал" not in found:
         found[found.index("веб-ресурс")] = "веб-портал"
-    if "ИСПДн" in found and "ПДн" not in found:
-        found.append("ПДн")
+    # Обработка персональных данных описывается типом «ИСПДн»
+    if "пдн" in lowered and "ИСПДн" not in found:
+        found.append("ИСПДн")
     return found
 
 
@@ -545,7 +553,11 @@ def parse_objects(issues: Issues) -> "OrderedDict[str, Dict[str, Any]]":
     return objects
 
 
-def parse_violator_types(levels: Dict[str, Dict[str, Any]], issues: Issues) -> "OrderedDict[str, Dict[str, Any]]":
+def parse_violator_types(
+    levels: Dict[str, Dict[str, Any]],
+    violator_index: Dict[str, Dict[str, Any]],
+    issues: Issues,
+) -> "OrderedDict[str, Dict[str, Any]]":
     raw_names = [normalize_ws(x) for x in read_text(SOURCES["violators_txt"]).splitlines() if normalize_ws(x)]
     details: Dict[str, Dict[str, str]] = {}
     for row in docx_rows(SOURCES["violator_types_docx"]):
@@ -558,11 +570,25 @@ def parse_violator_types(levels: Dict[str, Dict[str, Any]], issues: Issues) -> "
             "goals": row[3] if len(row) > 3 else "",
         }
 
-    # «тип нарушителя -> уровень возможностей» по файлу уровней
-    level_by_violator: Dict[str, str] = {}
-    for level_code, item in levels.items():
-        for name in item["violator_types"]:
-            level_by_violator[normalize_name(name)] = level_code
+    level_index = violator_index.get("level", {})
+    methods_index = violator_index.get("methods", {})
+    category_index = violator_index.get("category", {})
+
+    def resolve(key: str) -> Tuple[str, str, List[str]]:
+        """Уровень, категория и способы реализации вида нарушителя по файлу уровней."""
+        candidate = VIOLATOR_LEVEL_ALIASES.get(key, key)
+        if candidate not in level_index:
+            match = None
+            for name in level_index:
+                if name.startswith(candidate[:24]) or candidate.startswith(name[:24]):
+                    if match is None or len(name) > len(match):
+                        match = name
+            candidate = match or candidate
+        return (
+            level_index.get(candidate, ""),
+            category_index.get(candidate, ""),
+            list(methods_index.get(candidate, [])),
+        )
 
     types: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
     for raw in raw_names:
@@ -571,19 +597,25 @@ def parse_violator_types(levels: Dict[str, Dict[str, Any]], issues: Issues) -> "
         key = normalize_name(raw)
         lookup = VIOLATOR_TYPE_ALIASES.get(key, key)
         info = details.get(lookup, {})
-        category = info.get("category") or VIOLATOR_TYPE_CATEGORY_FALLBACK.get(key, "external")
+        level, xlsx_category, methods = resolve(key)
+        category = (
+            info.get("category")
+            or xlsx_category
+            or VIOLATOR_TYPE_CATEGORY_FALLBACK.get(key, "external")
+        )
         code = slugify(raw)
         while code in types:
             code += "_2"
-        level_key = VIOLATOR_LEVEL_ALIASES.get(key, key)
-        level = level_by_violator.get(level_key, "")
         if not level:
             issues.add(f"вид нарушителя «{display}»: не найден уровень возможностей в файле уровней")
+        if not methods:
+            issues.add(f"вид нарушителя «{display}»: не найдены способы реализации в файле уровней")
         types[code] = {
             "code": code,
             "name": display,
             "category": category,
             "level": level,
+            "methods": methods,
             "goals": info.get("goals", ""),
         }
     if len(types) != 13:
@@ -630,7 +662,12 @@ def merge_levels(
     violator_types: Dict[str, Dict[str, Any]],
     issues: Issues,
 ) -> "OrderedDict[str, Dict[str, Any]]":
-    """Дополнить уровни данными файла «Уровни возможностей нарушителей по УБИ.xlsx»."""
+    """Дополнить уровни способами реализации и видами нарушителей.
+
+    Название и описание уровня берутся из «Уровни возможностей нарушителей.docx»,
+    а перечень видов нарушителей и доступные им способы реализации — из
+    «Уровни возможностей нарушителей по УБИ.xlsx» (СП1-СП9).
+    """
     code_by_level: Dict[str, List[str]] = {}
     for code, item in violator_types.items():
         code_by_level.setdefault(item.get("level") or "", []).append(code)
@@ -639,119 +676,152 @@ def merge_levels(
         extra = capability.get(code)
         if not extra:
             issues.add(f"уровень {code}: нет данных в файле уровней возможностей")
+            item["methods"] = []
+            item["level_violators"] = []
             continue
-        item["potential"] = extra["potential"]
-        item["methods_extended"] = extra["methods_extended"]
+        item["methods"] = sorted(extra.get("methods", []), key=lambda x: int(x[2:]) if x[2:].isdigit() else 0)
         item["level_violators"] = code_by_level.get(code, [])
-        if extra["name"] and not item.get("name"):
+        if extra.get("name") and not item.get("name"):
             item["name"] = extra["name"]
 
-        # категории из файла уровней не должны противоречить «Виды нарушителей.docx»
-        for name, category in extra["categories"].items():
-            key = VIOLATOR_LEVEL_ALIASES.get(name, name)
-            for type_code in code_by_level.get(code, []):
-                if normalize_name(violator_types[type_code]["name"]) == key:
-                    if violator_types[type_code]["category"] != category:
-                        issues.add(
-                            f"вид нарушителя «{violator_types[type_code]['name']}»: категория "
-                            f"в файле уровней ({category}) не совпадает с «Виды нарушителей.docx» "
-                            f"({violator_types[type_code]['category']})"
-                        )
+    # категории из файла уровней не должны противоречить «Виды нарушителей.docx»
+    for item in violator_types.values():
+        level_code = item.get("level")
+        if not level_code:
+            continue
+        for name, category in (capability.get(level_code, {}).get("categories") or {}).items():
+            if normalize_name(item["name"]) == name and item["category"] != category:
+                issues.add(
+                    f"вид нарушителя «{item['name']}»: категория в файле уровней ({category}) "
+                    f"не совпадает с «Виды нарушителей.docx» ({item['category']})"
+                )
     return levels
 
 
-def parse_capability_levels(issues: Issues) -> "OrderedDict[str, Dict[str, Any]]":
+def parse_capability_levels(
+    issues: Issues,
+) -> Tuple["OrderedDict[str, Dict[str, Any]]", Dict[str, Dict[str, Any]]]:
     """Разобрать «Уровни возможностей нарушителей по УБИ.xlsx».
 
-    Файл даёт для каждого уровня возможностей Н1-Н4: потенциал, перечень видов
-    нарушителей и перечень способов реализации, доступных нарушителю этого уровня.
-    ВНИМАНИЕ: в файле используется расширенная нумерация способов реализации
-    (СП.1 ... СП.26), которая не совпадает с нумерацией СП1-СП9 методики и
-    ``бдму.xlsx``, поэтому перечень сохраняется отдельно (``methods_extended``)
-    и не смешивается с кодами корреляции.
+    Структура листа: «Уровень возможностей | Тип нарушителя | Нарушители
+    (категория) | Способ реализации». Уровень и тип нарушителя проставлены не в
+    каждой строке: пустые значения относятся к тому же уровню/типу, что и выше.
+    Для каждого вида нарушителя возвращаются уровень Н1-Н4, категория и доступные
+    ему способы реализации СП1-СП9 (новая нотация регламента).
     """
     if not SOURCES["levels_xlsx"].exists():
         issues.add(f"источник не найден: {SOURCES['levels_xlsx']}")
-        return OrderedDict()
+        return OrderedDict(), {"level": {}, "methods": {}, "category": {}}
 
     workbook = openpyxl.load_workbook(SOURCES["levels_xlsx"], data_only=True)
     sheet = workbook.worksheets[0]
     rows = list(sheet.iter_rows(values_only=True))
     header = [normalize_ws(str(c or "")) for c in rows[0]]
-    expected = ["Потенциал", "№", "Уровень возможностей", "Наименование", "Тип нарушителя", "Способ реализации"]
-    if header[:6] != expected:
-        issues.add(f"уровни возможностей: неожидаемые заголовки {header[:6]}")
+    expected = ["Уровень возможностей", "Тип нарушителя", "Нарушители (категория)", "Способ реализации"]
+    if header[:4] != expected:
+        issues.add(f"уровни возможностей: неожидаемые заголовки {header[:4]}")
 
     levels: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
-    current: Optional[Dict[str, Any]] = None
+    index_level: Dict[str, str] = {}
+    index_methods: Dict[str, List[str]] = {}
+    index_category: Dict[str, str] = {}
+    current_level: Optional[str] = None
+    current_type = ""
     for row in rows[1:]:
-        values = list(row) + [""] * 6
-        # Ячейку со способами реализации не нормализуем: в ней несколько строк
-        potential = normalize_ws("" if values[0] is None else str(values[0]))
-        number = normalize_ws("" if values[1] is None else str(values[1]))
-        level_name = normalize_ws("" if values[2] is None else str(values[2]))
-        violator = normalize_ws("" if values[3] is None else str(values[3]))
-        category = normalize_ws("" if values[4] is None else str(values[4]))
-        methods_raw = "" if values[5] is None else str(values[5])
-        if number:
-            if not re.match(r"^Н[1-4]$", number):
-                issues.add(f"уровни возможностей: неизвестный уровень {number!r}")
+        values = list(row) + [""] * 4
+        level = normalize_ws("" if values[0] is None else str(values[0]))
+        vtype = normalize_ws("" if values[1] is None else str(values[1]))
+        violator = normalize_ws("" if values[2] is None else str(values[2]))
+        methods_raw = normalize_ws("" if values[3] is None else str(values[3]))
+
+        if level:
+            if not re.match(r"^Н[1-4]$", level):
+                issues.add(f"уровни возможностей: неизвестный уровень {level!r}")
                 continue
-            current = levels.setdefault(
-                number,
+            current_level = level
+            levels.setdefault(
+                level,
                 {
-                    "code": number,
-                    "rank": int(number[1]),
-                    "potential": potential,
-                    "name": level_name,
-                    "methods_extended": [],
+                    "code": level,
+                    "rank": int(level[1]),
+                    "name": "",
+                    "methods": [],
                     "violator_types": [],
                     "categories": {},
                 },
             )
-            if potential:
-                current["potential"] = potential
-            if level_name:
-                current["name"] = level_name
-            # В источнике столбец «Потенциал» заполнен не для всех уровней
-            if not current.get("potential"):
-                lowered = (level_name or "").lower()
-                for keyword, value in (
-                    ("базовыми повышенными", "Средний повышенный"),
-                    ("средними", "Средний"),
-                    ("высокими", "Высокий"),
-                    ("базовыми", "Низкий"),
-                ):
-                    if keyword in lowered:
-                        current["potential"] = value
-                        current["potential_inferred"] = True
-                        break
-            for line in str(methods_raw).splitlines():
-                line = normalize_ws(line)
-                match = re.match(r"^(СП\.?\d+)\s+(.*)$", line)
-                if match:
-                    current["methods_extended"].append(
-                        {"code": match.group(1), "name": normalize_ws(match.group(2))}
-                    )
-        if current is None:
+        if vtype:
+            current_type = vtype
+        if current_level is None or not violator:
             continue
-        if violator:
-            if violator not in current["violator_types"]:
-                current["violator_types"].append(violator)
-            if category:
-                current["categories"][normalize_name(violator)] = (
-                    "external" if category.lower().startswith("внеш") else "internal"
-                )
+
+        category = "external" if current_type.lower().startswith("внеш") else "internal"
+        methods = split_codes(methods_raw, "СП")
+        key = normalize_name(violator)
+        index_level[key] = current_level
+        index_methods[key] = methods
+        index_category[key] = category
+
+        item = levels[current_level]
+        if violator not in item["violator_types"]:
+            item["violator_types"].append(violator)
+        item["categories"][key] = category
+        for code in methods:
+            if code not in item["methods"]:
+                item["methods"].append(code)
 
     if len(levels) != 4:
         issues.add(f"уровни возможностей: ожидалось 4, получено {len(levels)}")
-    total_violators = sum(len(item["violator_types"]) for item in levels.values())
-    if total_violators != 13:
-        issues.add(f"уровни возможностей: ожидалось 13 видов нарушителей, получено {total_violators}")
+    if len(index_level) != 13:
+        issues.add(f"уровни возможностей: ожидалось 13 видов нарушителей, получено {len(index_level)}")
     for item in levels.values():
-        if not item["methods_extended"]:
+        if not item["methods"]:
             issues.add(f"уровень {item['code']}: не указаны способы реализации")
-    return levels
+        item["methods"].sort(key=lambda x: int(x[2:]) if x[2:].isdigit() else 0)
+    return levels, {"level": index_level, "methods": index_methods, "category": index_category}
+
+
+def parse_violator_goals_table(issues: Issues) -> List[Dict[str, Any]]:
+    """Прочитать таблицу целей нарушителей (Таблица 7 «Виды нарушителей.docx»).
+
+    Строка таблицы: «Виды нарушителей | Нанесение ущерба физическому лицу |
+    Нанесение ущерба юридическому лицу, ИП | Нанесение ущерба государству |
+    Соответствие целей возможным негативным последствиям». Используется как
+    источник таблицы 5 отчёта.
+    """
+    document = docx.Document(str(SOURCES["violator_types_docx"]))
+    target = None
+    for table in document.tables:
+        probe = " ".join(
+            normalize_ws(cell.text) for row in table.rows[:2] for cell in row.cells
+        )
+        if "Нанесение ущерба физическому лицу" in probe:
+            target = table
+            break
+    if target is None:
+        issues.add("таблица целей нарушителей (Таблица 7) не найдена в Виды нарушителей.docx")
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    for row in target.rows:
+        cells = [normalize_ws(cell.text) for cell in row.cells]
+        if len(cells) < 5:
+            continue
+        name = cells[0]
+        if not name or name == "Виды нарушителей" or "Нанесение ущерба" in cells[1]:
+            continue
+        rows.append(
+            {
+                "violator": name,
+                "damage_physical": cells[1],
+                "damage_legal": cells[2],
+                "damage_state": cells[3],
+                "correspondence": cells[4],
+            }
+        )
+    if len(rows) < 9:
+        issues.add(f"таблица целей нарушителей: ожидалось не менее 9 строк, получено {len(rows)}")
+    return rows
 
 
 def parse_tactics(issues: Issues) -> "OrderedDict[str, Dict[str, Any]]":
@@ -1113,10 +1183,11 @@ def build(check_only: bool) -> int:
     system_types = parse_system_types(issues)
     consequences, risk_types = parse_consequences(issues)
     objects = parse_objects(issues)
-    capability_levels = parse_capability_levels(issues)
-    violator_types = parse_violator_types(capability_levels, issues)
+    capability_levels, violator_index = parse_capability_levels(issues)
+    violator_types = parse_violator_types(capability_levels, violator_index, issues)
     violator_levels = parse_violator_levels(issues)
     violator_levels = merge_levels(violator_levels, capability_levels, violator_types, issues)
+    violator_goals = parse_violator_goals_table(issues)
     tactics = parse_tactics(issues)
     interfaces = parse_interfaces(methods, issues)
     threats = parse_threats(objects, methods, consequences, tactics, issues)
@@ -1145,10 +1216,10 @@ def build(check_only: bool) -> int:
     )
     print(f"  тактики: {len(tactics)}, техники: {sum(len(t['techniques']) for t in tactics.values())}")
     print(f"  виды нарушителей: {len(violator_types)}, уровни: {len(violator_levels)}")
-    extended_total = sum(len(item.get("methods_extended") or []) for item in violator_levels.values())
+    methods_total = sum(len(item.get("methods") or []) for item in violator_levels.values())
     print(
-        f"    расширенный перечень способов реализации из файла уровней: {extended_total} позиций "
-        f"(нумерация СП.N не совпадает с СП1-СП9 методики — хранится отдельно)"
+        f"    способы реализации из файла уровней: {methods_total} назначений "
+        f"(СП1-СП9, нотация совпадает с методикой)"
     )
     print(f"  интерфейсы: {len(interfaces)}")
     for code, item in interfaces.items():
@@ -1178,8 +1249,12 @@ def build(check_only: bool) -> int:
         ),
         "system_types.yaml": ({"system_types": system_types}, "Типы информационных систем"),
         "violators.yaml": (
-            {"violator_types": violator_types, "violator_levels": violator_levels},
-            "Виды нарушителей и уровни возможностей Н1-Н4",
+            {
+                "violator_types": violator_types,
+                "violator_levels": violator_levels,
+                "violator_goals_table": violator_goals,
+            },
+            "Виды нарушителей, уровни возможностей Н1-Н4 и таблица целей нарушителей",
         ),
         "tactics.yaml": ({"tactics": tactics}, "Тактики (Т1-Т10) и техники"),
         "interfaces.yaml": (

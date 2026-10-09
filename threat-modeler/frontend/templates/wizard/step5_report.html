@@ -77,7 +77,7 @@
             <td>
                 {% for code in user_profile.violators.external_types %}<span class="tag">{{ code }}</span>{% else %}<span class="muted">не указаны</span>{% endfor %}
                 {% if user_profile.violators.external_level %}
-                <div>Уровень возможностей: <strong>{{ user_profile.violators.external_level }}</strong></div>
+                <div>Уровень возможностей (определён автоматически): <strong>{{ user_profile.violators.external_level }}</strong></div>
                 {% endif %}
             </td>
         </tr>
@@ -86,7 +86,7 @@
             <td>
                 {% for code in user_profile.violators.internal_types %}<span class="tag">{{ code }}</span>{% else %}<span class="muted">не указаны</span>{% endfor %}
                 {% if user_profile.violators.internal_level %}
-                <div>Уровень возможностей: <strong>{{ user_profile.violators.internal_level }}</strong></div>
+                <div>Уровень возможностей (определён автоматически): <strong>{{ user_profile.violators.internal_level }}</strong></div>
                 {% endif %}
             </td>
         </tr>
@@ -111,21 +111,23 @@
 <div class="panel">
     <h2>{{ table.title }}</h2>
 
-    {% if key == 'table2' %}
+    {% if key == 'table7' %}
     <div class="no-print inline" style="margin-bottom: 12px;">
         <input type="text" id="threat-search"
-               placeholder="Поиск по идентификатору, названию, объекту, последствию..."
+               placeholder="Поиск по идентификатору, объекту, последствию..."
                style="max-width: 520px;">
         <span class="muted">показано <span id="threat-visible">{{ table.rows|length }}</span> из {{ table.rows|length }}</span>
     </div>
     {% endif %}
 
     <div class="table-scroll">
-        <table class="report" {% if key == 'table2' %}id="threat-table"{% endif %}>
+        <table class="report" {% if key == 'table7' %}id="threat-table"{% endif %}>
             <thead>
+            {% for header_row in table.header_rows %}
             <tr>
-                {% for column in table.table.columns %}<th>{{ column.header }}</th>{% endfor %}
+                {% for cell in header_row %}<th{% if cell.colspan > 1 %} colspan="{{ cell.colspan }}"{% endif %}{% if cell.rowspan > 1 %} rowspan="{{ cell.rowspan }}"{% endif %}>{{ cell.text }}</th>{% endfor %}
             </tr>
+            {% endfor %}
             </thead>
             <tbody>
             {% for row in table.rows %}

@@ -5,8 +5,9 @@
 <div class="panel">
     <h2>Шаг 2. Нарушители</h2>
     <p class="hint">
-        Отметьте виды нарушителей и укажите уровень их возможностей (Н1 — базовые, Н4 — высокие).
-        Уровень возможностей сравнивается с уровнями, указанными для каждой УБИ в сводной таблице.
+        Отметьте виды нарушителей, актуальные для системы. Уровень возможностей нарушителей
+        не запрашивается: он определяется автоматически по отметкам — как максимальный уровень
+        среди выбранных нарушителей отдельно для внешних и внутренних (Н1 — базовые, Н4 — высокие).
     </p>
 
     <form method="POST" action="/api/wizard/step2">
@@ -30,17 +31,10 @@
                 </label>
                 {% endfor %}
             </div>
-            <div style="margin-top: 14px;">
-                <label class="field" for="external_level">Уровень возможностей внешних нарушителей</label>
-                <select id="external_level" name="external_level">
-                    <option value="">Не указан</option>
-                    {% for code, level in violator_levels.items() %}
-                    <option value="{{ code }}" {% if violators.external_level == code %}selected{% endif %}>
-                        {{ code }} — {{ level.name }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
+            <p class="hint" style="margin-top: 12px;">
+                Определённый уровень возможностей внешних нарушителей:
+                <strong id="external_level_view">{{ violators.external_level or '—' }}</strong>
+            </p>
         </fieldset>
 
         <fieldset>
@@ -61,26 +55,14 @@
                 </label>
                 {% endfor %}
             </div>
-            <div style="margin-top: 14px;">
-                <label class="field" for="internal_level">Уровень возможностей внутренних нарушителей</label>
-                <select id="internal_level" name="internal_level">
-                    <option value="">Не указан</option>
-                    {% for code, level in violator_levels.items() %}
-                    <option value="{{ code }}" {% if violators.internal_level == code %}selected{% endif %}>
-                        {{ code }} — {{ level.name }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
+            <p class="hint" style="margin-top: 12px;">
+                Определённый уровень возможностей внутренних нарушителей:
+                <strong id="internal_level_view">{{ violators.internal_level or '—' }}</strong>
+            </p>
         </fieldset>
 
         <div class="nav-actions">
-            <div class="inline">
-                <a href="/api/wizard/step/1" class="btn secondary">← Назад</a>
-                <button type="button" class="btn secondary" onclick="fillLevels()">
-                    Подставить уровень по выбранным нарушителям
-                </button>
-            </div>
+            <a href="/api/wizard/step/1" class="btn secondary">← Назад</a>
             <button type="submit" class="btn">Далее →</button>
         </div>
     </form>
@@ -90,24 +72,21 @@
     <summary>Справка по уровням возможностей нарушителей</summary>
     <p class="hint" style="margin-top: 12px;">
         Данные приведены по файлу «Уровни возможностей нарушителей по УБИ.xlsx».
-        Перечень способов реализации в этом файле использует собственную нумерацию
-        (СП.1 … СП.26) и не совпадает с кодами СП1–СП9, применяемыми в корреляции УБИ.
+        Способы реализации указаны в нотации методики СП1–СП9.
     </p>
     <table class="report" style="margin-top: 12px;">
         <thead>
         <tr>
             <th style="width:70px;">Уровень</th>
-            <th style="width:120px;">Потенциал</th>
-            <th style="width:260px;">Наименование</th>
-            <th style="width:220px;">Виды нарушителей</th>
-            <th>Способы реализации уровня</th>
+            <th style="width:300px;">Наименование</th>
+            <th style="width:260px;">Виды нарушителей</th>
+            <th>Способы реализации</th>
         </tr>
         </thead>
         <tbody>
         {% for code, level in violator_levels.items() %}
         <tr>
             <td>{{ code }}</td>
-            <td>{{ level.potential or '—' }}</td>
             <td>{{ level.name }}</td>
             <td>
                 {% for type_code in level.level_violators or [] %}
@@ -115,8 +94,8 @@
                 {% else %}<span class="muted">—</span>{% endfor %}
             </td>
             <td>
-                {% for method in level.methods_extended or [] %}
-                <div>{{ method.code }} {{ method.name }}</div>
+                {% for method in level.methods or [] %}
+                <div>{{ method }}{% if method_names.get(method) %} — {{ method_names.get(method) }}{% endif %}</div>
                 {% else %}<span class="muted">—</span>{% endfor %}
             </td>
         </tr>
@@ -126,25 +105,26 @@
 </details>
 
 <script>
-    // Уровень возможностей по выбранным видам нарушителей: берём максимальный
-    function highestLevel(selector) {
-        let best = '';
-        document.querySelectorAll(selector).forEach(box => {
-            if (!box.checked) { return; }
-            const level = box.dataset.level || '';
-            if (level && (!best || level > best)) { best = level; }
-        });
-        return best;
-    }
-
-    function fillLevels() {
-        const external = highestLevel('input[name="external_types"]');
-        const internal = highestLevel('input[name="internal_types"]');
-        if (external) { document.getElementById('external_level').value = external; }
-        if (internal) { document.getElementById('internal_level').value = internal; }
-        if (!external && !internal) {
-            alert('Сначала отметьте виды нарушителей.');
+    // Живой показ автоматически определённого уровня по отмеченным нарушителям
+    (function () {
+        function highestLevel(selector) {
+            let best = '';
+            document.querySelectorAll(selector).forEach(box => {
+                if (!box.checked) { return; }
+                const level = box.dataset.level || '';
+                if (level && (!best || level > best)) { best = level; }
+            });
+            return best || '—';
         }
-    }
+        function refresh() {
+            const ext = document.getElementById('external_level_view');
+            const int = document.getElementById('internal_level_view');
+            if (ext) { ext.textContent = highestLevel('input[name="external_types"]'); }
+            if (int) { int.textContent = highestLevel('input[name="internal_types"]'); }
+        }
+        document.querySelectorAll('input[name="external_types"], input[name="internal_types"]')
+            .forEach(box => box.addEventListener('change', refresh));
+        refresh();
+    })();
 </script>
 {% endblock %}

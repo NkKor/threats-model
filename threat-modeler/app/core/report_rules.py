@@ -3,6 +3,15 @@
 Файл правил — обычный текст, редактируется в блокноте без перезапуска сервиса.
 Загрузчик разбирает его, проверяет имена полей и отдаёт структуру, по которой
 строятся и страница предпросмотра, и выгрузки XLSX/DOCX.
+
+Формат колонки::
+
+    column = поле | Заголовок | ширина | выравнивание | Группа
+
+Пятое поле «Группа» необязательно. Если оно задано, шапка таблицы становится
+двухуровневой: соседние колонки с одинаковой группой объединяются по горизонтали
+(над ними выводится общий заголовок), а колонки без группы объединяются по
+вертикали на обе строки.
 """
 
 from __future__ import annotations
@@ -14,20 +23,32 @@ from typing import Dict, List, Optional, Tuple
 from app.config import settings
 
 # Поля, доступные в таблицах (см. data/report-rules.txt)
-TABLE1_FIELDS = ("row_number", "code", "risk", "name", "conditions")
-TABLE2_FIELDS = (
-    "ubi_id",
-    "ubi_name",
-    "violator_internal",
-    "violator_external",
-    "objects",
-    "impacts",
-    "methods",
-    "consequences",
-    "tactics",
-    "techniques",
-    "notes",
-)
+TABLE_FIELDS: Dict[str, Tuple[str, ...]] = {
+    "table1": ("row_number", "code", "risk", "risk_name", "risk_title", "name", "conditions"),
+    "table2": ("consequence", "objects", "impacts"),
+    "table3": ("row_number", "violator", "category", "goals"),
+    "table4": ("row_number", "level", "level_name", "capabilities", "violators"),
+    "table5": ("violator", "damage_physical", "damage_legal", "damage_state", "correspondence"),
+    "table6": ("row_number", "violator", "category", "objects", "interfaces", "methods"),
+    "table7": (
+        "ubi_id",
+        "ubi_name",
+        "violator_internal",
+        "violator_external",
+        "objects",
+        "methods",
+        "impacts",
+        "consequences",
+        "tactics",
+        "techniques",
+        "notes",
+    ),
+}
+TABLE_KEYS: Tuple[str, ...] = tuple(TABLE_FIELDS)
+
+# Совместимость с прежним API
+TABLE1_FIELDS = TABLE_FIELDS["table1"]
+TABLE2_FIELDS = TABLE_FIELDS["table2"]
 
 ALIGNMENTS = ("left", "center", "right")
 RULES_RELATIVE_PATH = Path("report-rules.txt")
@@ -45,6 +66,21 @@ class Column:
     header: str
     width: int = 20
     align: str = "left"
+    group: Optional[str] = None
+
+
+@dataclass
+class HeaderCell:
+    """Ячейка шапки таблицы (с учётом объединений).
+
+    ``col`` — номер колонки сетки (0-based), с которой начинается ячейка.
+    Для второй строки шапки перечисляются только ячейки сгруппированных колонок.
+    """
+
+    text: str
+    colspan: int = 1
+    rowspan: int = 1
+    col: int = 0
 
 
 @dataclass
@@ -59,6 +95,42 @@ class TableRules:
     @property
     def field_names(self) -> List[str]:
         return [column.field for column in self.columns]
+
+    @property
+    def has_groups(self) -> bool:
+        return any(column.group for column in self.columns)
+
+    def header_rows(self) -> List[List[HeaderCell]]:
+        """Строки шапки таблицы: одна либо две (с групповым заголовком)."""
+        if not self.columns:
+            return [[]]
+        if not self.has_groups:
+            return [
+                [HeaderCell(column.header, col=index) for index, column in enumerate(self.columns)]
+            ]
+
+        top: List[HeaderCell] = []
+        bottom: List[HeaderCell] = []
+        index = 0
+        total = len(self.columns)
+        while index < total:
+            column = self.columns[index]
+            if column.group:
+                end = index
+                while end < total and self.columns[end].group == column.group:
+                    end += 1
+                top.append(HeaderCell(column.group, colspan=end - index, rowspan=1, col=index))
+                for grouped in range(index, end):
+                    bottom.append(HeaderCell(self.columns[grouped].header, col=grouped))
+                index = end
+            else:
+                top.append(HeaderCell(column.header, colspan=1, rowspan=2, col=index))
+                index += 1
+        return [top, bottom]
+
+    @property
+    def header_height(self) -> int:
+        return len(self.header_rows())
 
 
 @dataclass
@@ -99,11 +171,12 @@ def parse_rules(text: str, path: Optional[Path] = None) -> ReportRules:
     warnings: List[str] = []
     sections: Dict[str, Dict[str, object]] = {
         "report": {"title": "Модель угроз безопасности информации", "show_profile": True},
-        "table1": {"enabled": True, "title": "", "columns": []},
-        "table2": {"enabled": True, "title": "", "columns": []},
     }
+    for key in TABLE_KEYS:
+        sections[key] = {"enabled": True, "title": "", "columns": []}
+
     current: Optional[str] = None
-    fields_by_table = {"table1": TABLE1_FIELDS, "table2": TABLE2_FIELDS}
+    allowed_sections = ("report",) + TABLE_KEYS
 
     for number, raw_line in enumerate(text.splitlines(), start=1):
         line = raw_line.strip()
@@ -114,12 +187,15 @@ def parse_rules(text: str, path: Optional[Path] = None) -> ReportRules:
             if section not in sections:
                 raise ReportRulesError(
                     f"строка {number}: неизвестный раздел [{section}]; "
-                    f"допустимы [report], [table1], [table2]"
+                    f"допустимы {', '.join('[' + key + ']' for key in allowed_sections)}"
                 )
             current = section
             continue
         if current is None:
-            raise ReportRulesError(f"строка {number}: параметр вне раздела (ожидается [report], [table1] или [table2])")
+            raise ReportRulesError(
+                f"строка {number}: параметр вне раздела "
+                f"(ожидается {', '.join('[' + key + ']' for key in allowed_sections)})"
+            )
         if "=" not in line:
             raise ReportRulesError(f"строка {number}: ожидается «параметр = значение»")
         key, value = line.split("=", 1)
@@ -148,13 +224,13 @@ def parse_rules(text: str, path: Optional[Path] = None) -> ReportRules:
         if len(parts) < 2 or not parts[0] or not parts[1]:
             raise ReportRulesError(
                 f"строка {number}: колонка должна быть вида "
-                f"column = поле | Заголовок | ширина | выравнивание"
+                f"column = поле | Заголовок | ширина | выравнивание | Группа"
             )
         field_name = parts[0].lower()
-        if field_name not in fields_by_table[current]:
+        if field_name not in TABLE_FIELDS[current]:
             raise ReportRulesError(
                 f"строка {number}: неизвестное поле «{parts[0]}» в разделе [{current}]; "
-                f"допустимы: {', '.join(fields_by_table[current])}"
+                f"допустимы: {', '.join(TABLE_FIELDS[current])}"
             )
         width = 20
         if len(parts) >= 3 and parts[2]:
@@ -172,10 +248,13 @@ def parse_rules(text: str, path: Optional[Path] = None) -> ReportRules:
                     f"строка {number}: выравнивание «{parts[3]}» не поддерживается; "
                     f"допустимы: {', '.join(ALIGNMENTS)}"
                 )
+        group = None
+        if len(parts) >= 5 and parts[4] and parts[4] not in ("-", "—", "–"):
+            group = parts[4]
         columns = sections[current]["columns"]
-        columns.append(Column(field=field_name, header=parts[1], width=width, align=align))
+        columns.append(Column(field=field_name, header=parts[1], width=width, align=align, group=group))
 
-    for table_key in ("table1", "table2"):
+    for table_key in TABLE_KEYS:
         columns = sections[table_key]["columns"]
         if not columns:
             warnings.append(f"[{table_key}] не содержит ни одной колонки — таблица не будет сформирована")
@@ -183,7 +262,7 @@ def parse_rules(text: str, path: Optional[Path] = None) -> ReportRules:
             sections[table_key]["title"] = f"Таблица {table_key[-1]}"
 
     # повторяющиеся поля — почти всегда опечатка при правке файла
-    for table_key in ("table1", "table2"):
+    for table_key in TABLE_KEYS:
         names = [column.field for column in sections[table_key]["columns"]]
         duplicates = sorted({name for name in names if names.count(name) > 1})
         if duplicates:
@@ -193,18 +272,13 @@ def parse_rules(text: str, path: Optional[Path] = None) -> ReportRules:
         title=str(sections["report"]["title"]),
         show_profile=bool(sections["report"]["show_profile"]),
         tables={
-            "table1": TableRules(
-                key="table1",
-                enabled=bool(sections["table1"]["enabled"]),
-                title=str(sections["table1"]["title"]),
-                columns=list(sections["table1"]["columns"]),
-            ),
-            "table2": TableRules(
-                key="table2",
-                enabled=bool(sections["table2"]["enabled"]),
-                title=str(sections["table2"]["title"]),
-                columns=list(sections["table2"]["columns"]),
-            ),
+            key: TableRules(
+                key=key,
+                enabled=bool(sections[key]["enabled"]),
+                title=str(sections[key]["title"]),
+                columns=list(sections[key]["columns"]),
+            )
+            for key in TABLE_KEYS
         },
         source_path=path,
         warnings=warnings,
@@ -237,6 +311,18 @@ def row_values(row: Dict[str, object], columns: List[Column], row_number: Option
     return values
 
 
+def _rows_for(report, key: str) -> List[Dict[str, object]]:
+    """Строки таблицы: из ``table_rows`` отчёта или из совместимых полей."""
+    table_rows = getattr(report, "table_rows", None)
+    if table_rows and key in table_rows:
+        return [dict(row) for row in table_rows[key]]
+    if key == "table1":
+        return [item.model_dump() for item in report.risk_table]
+    if key == "table7":
+        return [item.model_dump() for item in report.threats]
+    return []
+
+
 def build_tables(report, rules: ReportRules) -> Dict[str, Dict[str, object]]:
     """Собрать таблицы отчёта по правилам: заголовки и готовые строки.
 
@@ -244,18 +330,19 @@ def build_tables(report, rules: ReportRules) -> Dict[str, Dict[str, object]]:
     поэтому предпросмотр всегда совпадает с экспортом.
     """
     tables: Dict[str, Dict[str, object]] = {}
-
-    table1 = rules.table("table1")
-    if table1.enabled and table1.columns:
+    for key in TABLE_KEYS:
+        table = rules.table(key)
+        if not (table.enabled and table.columns):
+            continue
         rows = [
-            row_values(item.model_dump(), table1.columns, row_number=index)
-            for index, item in enumerate(report.risk_table, start=1)
+            row_values(row, table.columns, row_number=index)
+            for index, row in enumerate(_rows_for(report, key), start=1)
         ]
-        tables["table1"] = {"title": table1.title, "table": table1, "rows": rows}
-
-    table2 = rules.table("table2")
-    if table2.enabled and table2.columns:
-        rows = [row_values(item.model_dump(), table2.columns) for item in report.threats]
-        tables["table2"] = {"title": table2.title, "table": table2, "rows": rows}
-
+        tables[key] = {
+            "key": key,
+            "title": table.title,
+            "table": table,
+            "rows": rows,
+            "header_rows": table.header_rows(),
+        }
     return tables

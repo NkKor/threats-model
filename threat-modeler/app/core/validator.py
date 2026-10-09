@@ -35,6 +35,12 @@ def validate_system_profile(data: Dict[str, Any]) -> ValidationResult:
 
     known_types = set(ReferenceLoader.get_system_types())
     system_types = [item for item in data.get("system_types") or [] if item]
+    # Тип ИСПДн и признак обработки ПДн связаны в обе стороны
+    if "ИСПДн" in system_types:
+        data["processes_pd"] = True
+    elif data.get("processes_pd") and "ИСПДн" not in system_types:
+        system_types = system_types + ["ИСПДн"]
+        data["system_types"] = system_types
     unknown = [item for item in system_types if item not in known_types]
     if unknown:
         errors.append(f"Неизвестные типы ИС: {', '.join(unknown)}")
@@ -68,7 +74,6 @@ def validate_violator_profile(data: Dict[str, Any]) -> ValidationResult:
     warnings: List[str] = []
 
     types = ReferenceLoader.get_violator_types()
-    levels = ReferenceLoader.get_violator_levels()
 
     for category, field in (("external", "external_types"), ("internal", "internal_types")):
         for code in data.get(field) or []:
@@ -81,17 +86,8 @@ def validate_violator_profile(data: Dict[str, Any]) -> ValidationResult:
                     f"{'внешних' if item.get('category') == 'external' else 'внутренних'}"
                 )
 
-    for field, label in (("external_level", "внешних"), ("internal_level", "внутренних")):
-        level = data.get(field)
-        if level and level not in levels:
-            errors.append(f"Неверный уровень возможностей {label} нарушителей: {level}")
-
     if not (data.get("external_types") or data.get("internal_types")):
         warnings.append("Виды нарушителей не выбраны — перечень УБИ не будет ограничен по нарушителям")
-    if data.get("external_types") and not data.get("external_level"):
-        warnings.append("Уровень возможностей внешних нарушителей не указан — фильтр по ним не применяется")
-    if data.get("internal_types") and not data.get("internal_level"):
-        warnings.append("Уровень возможностей внутренних нарушителей не указан — фильтр по ним не применяется")
 
     return ValidationResult(errors, warnings)
 

@@ -16,8 +16,10 @@ def fill_wizard(client, system_types=None, technologies=None, objects=None, inte
 
     system_types = system_types or list(ReferenceLoader.get_system_types())[:2]
     technologies = technologies or []
-    interfaces = interfaces or list(ReferenceLoader.get_interfaces())[:3]
     objects = objects or ["О4", "О31", "О23"]
+    violator_types = ReferenceLoader.get_violator_types()
+    external = next(code for code, item in violator_types.items() if item["category"] == "external")
+    internal = next(code for code, item in violator_types.items() if item["category"] == "internal")
 
     page = client.get("/api/wizard/")
     assert page.status_code == 200
@@ -40,7 +42,7 @@ def fill_wizard(client, system_types=None, technologies=None, objects=None, inte
     csrf = extract_csrf(page.text)
     response = client.post(
         "/api/wizard/step2",
-        data={"csrf_token": csrf, "external_level": "Н4", "internal_level": "Н4"},
+        data={"csrf_token": csrf, "external_types": [external], "internal_types": [internal]},
         follow_redirects=False,
     )
     assert response.status_code == 303, response.text
@@ -49,7 +51,7 @@ def fill_wizard(client, system_types=None, technologies=None, objects=None, inte
     csrf = extract_csrf(page.text)
     response = client.post(
         "/api/wizard/step3",
-        data={"csrf_token": csrf, "interfaces": interfaces},
+        data={"csrf_token": csrf},
         follow_redirects=False,
     )
     assert response.status_code == 303, response.text
@@ -61,7 +63,6 @@ def fill_wizard(client, system_types=None, technologies=None, objects=None, inte
         data={
             "csrf_token": csrf,
             "selected_objects": objects,
-            "selected_impacts": impacts or ["В1", "В2", "В3"],
         },
         follow_redirects=False,
     )
@@ -103,21 +104,22 @@ def test_reference_endpoints(client):
     counts = payload["counts"]
     assert counts["objects"] == 38
     assert counts["methods"] == 9
-    assert counts["system_types"] == 14
+    assert counts["system_types"] == 13
     assert counts["interfaces"] == 10
     assert counts["consequences"] == 67
     assert counts["violator_types"] == 13
     assert counts["violator_levels"] == 4
     assert counts["tactics"] == 10
 
-    assert len(client.get("/api/reference/system-types").json()) == 14
+    assert len(client.get("/api/reference/system-types").json()) == 13
 
     violators = client.get("/api/reference/violators").json()
     assert len(violators["violator_types"]) == 13
     for level in violators["violator_levels"].values():
-        assert level["methods_extended"], f"уровень {level['code']} без способов реализации"
+        assert level["methods"], f"уровень {level['code']} без способов реализации"
     levels = {item["level"] for item in violators["violator_types"].values()}
     assert levels == {"Н1", "Н2", "Н3", "Н4"}
+    assert violators["violator_goals_table"], "нет таблицы целей нарушителей"
 
 
 # --------------------------------------------------------------------------- #
@@ -171,7 +173,7 @@ def test_clear_wipes_session_and_shows_clean_form(client):
     fresh = client.get("/api/wizard/")
     assert fresh.status_code == 200
     # ни один тип ИС и ни один объект не отмечен
-    assert "checked" not in fresh.text
+    assert "checked>" not in fresh.text
     # и данные шага 2 больше не подставляются
     step2 = client.get("/api/wizard/step/2")
     assert 'value="Н3" selected' not in step2.text
@@ -202,11 +204,12 @@ def test_export_xlsx(client):
     from openpyxl import load_workbook
 
     workbook = load_workbook(io.BytesIO(response.content))
-    assert workbook.sheetnames == ["Таблица 1", "Таблица 2"]
-    sheet = workbook["Таблица 2"]
-    assert sheet.max_row > 2, "таблица 2 не содержит строк с УБИ"
+    assert workbook.sheetnames == [f"Таблица {i}" for i in range(1, 8)]
+    sheet = workbook["Таблица 7"]
+    assert sheet.max_row > 3, "таблица 7 не содержит строк с УБИ"
     # шапка соответствует правилам отчёта
     assert sheet.cell(row=2, column=1).value == "Идентификатор УБИ"
+    assert sheet.cell(row=2, column=2).value == "Уровень возможностей нарушителей"
 
 
 def test_export_docx(client):
@@ -219,7 +222,7 @@ def test_export_docx(client):
     import docx
 
     document = docx.Document(io.BytesIO(response.content))
-    assert len(document.tables) == 2
+    assert len(document.tables) == 7
     assert any("Таблица 1" in paragraph.text for paragraph in document.paragraphs)
 
 
@@ -239,7 +242,7 @@ def test_export_respects_report_rules(client, tmp_path):
     custom.write_text(
         "[report]\ntitle = Свой отчёт\nshow_profile = no\n"
         "[table1]\nenabled = no\n\n"
-        "[table2]\ntitle = Только идентификаторы\ncolumn = ubi_id | Код УБИ | 16\n",
+        "[table7]\ntitle = Только идентификаторы\ncolumn = ubi_id | Код УБИ | 16\n",
         encoding="utf-8",
     )
     old_data_dir = settings.data_dir
@@ -257,8 +260,8 @@ def test_export_respects_report_rules(client, tmp_path):
         from openpyxl import load_workbook
 
         workbook = load_workbook(io.BytesIO(export.content))
-        assert workbook.sheetnames == ["Таблица 2"]
-        assert workbook["Таблица 2"].cell(row=2, column=1).value == "Код УБИ"
+        assert workbook.sheetnames == ["Таблица 7"]
+        assert workbook["Таблица 7"].cell(row=2, column=1).value == "Код УБИ"
     finally:
         settings.data_dir = old_data_dir
 
