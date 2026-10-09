@@ -34,13 +34,9 @@ from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from app.core.reference_loader import (
     ReferenceLoader,
+    format_code_list,
     format_codes,
-    get_consequence_name,
-    get_impact_name,
-    get_method_name,
     get_object_name,
-    get_tactic_name,
-    get_technique_name,
 )
 from app.config import settings
 from app.models.db_models import Threat, ThreatObject, split_csv
@@ -263,7 +259,12 @@ def build_risk_table(system_types: Sequence[str]) -> List[ConsequenceView]:
 
 
 def build_threat_view(threat: Threat, selected_objects: Sequence[str]) -> ThreatView:
-    """Строка таблицы 2 по одной УБИ."""
+    """Строка таблицы 2 по одной УБИ.
+
+    Объекты воздействия выводятся как «код (наименование)», а виды воздействия,
+    способы реализации, негативные последствия, тактики и техники — только
+    кодами через запятую: полные формулировки делали таблицу громоздкой.
+    """
     data = _aggregate(threat, selected_objects)
     return ThreatView(
         ubi_id=threat.id,
@@ -271,11 +272,11 @@ def build_threat_view(threat: Threat, selected_objects: Sequence[str]) -> Threat
         violator_internal=", ".join(split_csv(threat.violator_int)) or EXCLUDE_MARK,
         violator_external=", ".join(split_csv(threat.violator_ext)) or EXCLUDE_MARK,
         objects=format_codes(data["objects"], get_object_name),
-        methods=format_codes(data["methods"], get_method_name),
-        impacts=format_codes(threat_impacts(threat), get_impact_name) or EXCLUDE_MARK,
-        consequences=format_codes(data["consequences"], get_consequence_name),
-        tactics=format_codes(data["tactics"], get_tactic_name),
-        techniques=format_codes(data["techniques"], get_technique_name),
+        methods=format_code_list(data["methods"]),
+        impacts=format_code_list(threat_impacts(threat)) or EXCLUDE_MARK,
+        consequences=format_code_list(data["consequences"]),
+        tactics=format_code_list(data["tactics"]),
+        techniques=format_code_list(data["techniques"]),
         notes=threat.note or threat.source_note or "",
     )
 

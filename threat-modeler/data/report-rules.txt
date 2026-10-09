@@ -30,12 +30,12 @@
 #    ubi_name             — наименование УБИ
 #    violator_internal    — уровень возможностей внутреннего нарушителя
 #    violator_external    — уровень возможностей внешнего нарушителя
-#    objects              — объекты воздействия
-#    impacts              — виды воздействия
-#    methods              — способы реализации
-#    consequences         — негативные последствия
-#    tactics              — тактики
-#    techniques           — техники
+#    objects              — объекты воздействия (код и наименование)
+#    impacts              — виды воздействия (только коды: В1, В2)
+#    methods              — способы реализации (только коды: СП1, СП2)
+#    consequences         — негативные последствия (только коды: у2.1, у2.2)
+#    tactics              — тактики (только коды: Т1, Т2)
+#    techniques           — техники (только коды: Т2.5, Т2.6)
 #    notes                — примечания
 # =============================================================================
 
@@ -63,9 +63,9 @@ column = ubi_name | Наименование УБИ | 60 | left
 column = violator_internal | Уровень возможностей нарушителей (Внутренний) | 20 | center
 column = violator_external | Уровень возможностей нарушителей (Внешний) | 20 | center
 column = objects | Объект воздействия | 40 | left
-column = impacts | Виды воздействия | 26 | left
-column = methods | Способы реализации | 40 | left
-column = consequences | Негативные последствия | 60 | left
-column = tactics | Тактика | 34 | left
-column = techniques | Техника | 40 | left
+column = impacts | Виды воздействия | 16 | left
+column = methods | Способы реализации | 16 | left
+column = consequences | Негативные последствия | 20 | left
+column = tactics | Тактика | 16 | left
+column = techniques | Техника | 16 | left
 column = notes | Примечания | 24 | left

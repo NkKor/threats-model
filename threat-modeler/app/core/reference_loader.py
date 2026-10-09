@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -246,3 +247,17 @@ def format_codes(codes: List[str], namer) -> str:
         name = namer(code)
         parts.append(f"{code} ({name})" if name and name != code else code)
     return "; ".join(parts)
+
+
+def format_code_list(codes) -> str:
+    """Список только кодов через запятую (компактный вид колонки отчёта).
+
+    Порядок естественный: ``Т2`` раньше ``Т10``, ``Т2.5`` раньше ``Т2.10`` —
+    так перечень читается как «Т1, Т2, Т3» и не зависит от порядка обхода пар.
+    """
+    def sort_key(code: str):
+        numbers = re.findall(r"\d+", code)
+        return tuple(int(number) for number in numbers) if numbers else (0,)
+
+    unique = {code for code in codes if code}
+    return ", ".join(sorted(unique, key=sort_key))
